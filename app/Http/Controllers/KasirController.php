@@ -7,8 +7,13 @@ use App\Models\Barang;
 class KasirController extends Controller
 {
     public function index()
-    {
-        $barangs = Barang::where('status', 'aktif')->paginate(12);
-        return view('kasir.index', compact('barangs'));
-    }
+{
+    $barangs = Barang::with('diskon')
+        ->where('stok', '>', 0)
+        ->where('status', 'aktif')
+        ->get();
+
+    return view('kasir.index', compact('barangs'));
+}
+
 }

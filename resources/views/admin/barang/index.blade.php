@@ -40,7 +40,7 @@
             <table style="width:100%;min-width:1000px;border-collapse:collapse;">
                 <thead>
                     <tr style="background:linear-gradient(135deg,#f8fafc 0%,#e0e7ff 100%);">
-                        <th style="padding:16px;font-weight:700;text-align:left;color:#1e293b;font-size:14px;border-bottom:2px solid #cbd5e1;">Plu</th>
+                        <th style="padding:16px;font-weight:700;text-align:left;color:#1e293b;font-size:14px;border-bottom:2px solid #cbd5e1;">PLU</th>
                         <th style="padding:16px;font-weight:700;text-align:left;color:#1e293b;font-size:14px;border-bottom:2px solid #cbd5e1;">Nama</th>
                         <th style="padding:16px;font-weight:700;text-align:right;color:#1e293b;font-size:14px;border-bottom:2px solid #cbd5e1;">Harga Beli</th>
                         <th style="padding:16px;font-weight:700;text-align:right;color:#1e293b;font-size:14px;border-bottom:2px solid #cbd5e1;">Harga Jual</th>

@@ -38,6 +38,14 @@
         .swal2-popup {
             font-family: inherit;
         }
+        .search-item-row:hover {
+            background-color: #dbeafe;
+            cursor: pointer;
+        }
+        .search-item-selected {
+            background-color: #bfdbfe;
+            outline: 2px solid #3b82f6;
+        }
     </style>
 </head>
 
@@ -129,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         <div>
             <p class="text-sm font-bold text-gray-800">Barcode Scanner Aktif</p>
-            <p class="text-xs text-gray-600">Scan barcode untuk menambahkan barang</p>
+            <p class="text-xs text-gray-600">Scan barcode atau tekan F12 untuk cari barang</p>
         </div>
     </div>
 
@@ -179,6 +187,29 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 
+</div>
+
+<div id="searchModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-800">Cari Barang<span class="keyboard-hint ml-2">ESC untuk tutup</span></h3>
+            <button id="btnCloseSearch" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="mb-4">
+            <input type="text" id="searchInput" class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-lg" placeholder="Ketik kode barang atau nama barang...">
+        </div>
+
+        <div id="searchResults" class="max-h-96 overflow-y-auto border border-gray-200 rounded">
+            <div class="p-8 text-center text-gray-400">
+                Ketik untuk mencari barang
+            </div>
+        </div>
+    </div>
 </div>
 
 <div id="cashModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -265,7 +296,6 @@ document.addEventListener('DOMContentLoaded', function() {
         <p id="notifText" class="font-semibold text-sm"></p>
     </div>
 </div>
-
 <script>
 let cart = [];
 let barcodeBuffer = '';
@@ -274,6 +304,8 @@ let useDiscount = false;
 let selectedItemIndex = -1;
 let isProcessingPayment = false;
 let currentRfid = '';
+let searchResults = [];
+let selectedSearchIndex = -1;
 
 const barangData = [
     @foreach($barangs as $b)
@@ -524,17 +556,165 @@ function deleteSelectedItem() {
     showNotification(`${item.name} dihapus`, 'success');
 }
 
+function showSearchModal() {
+    document.getElementById('searchModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    searchResults = [];
+    selectedSearchIndex = -1;
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchResults').innerHTML = '<div class="p-8 text-center text-gray-400">Ketik untuk mencari barang</div>';
+    setTimeout(() => document.getElementById('searchInput').focus(), 100);
+}
+
+function closeSearchModal() {
+    document.getElementById('searchModal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
+
+function searchBarang(query) {
+    if (!query || query.length === 0) {
+        searchResults = [];
+        selectedSearchIndex = -1;
+        document.getElementById('searchResults').innerHTML = '<div class="p-8 text-center text-gray-400">Ketik untuk mencari barang</div>';
+        return;
+    }
+    
+    const lowerQuery = query.toLowerCase();
+    searchResults = barangData.filter(b => 
+        b.kode_barang.toLowerCase().includes(lowerQuery) || 
+        b.nama.toLowerCase().includes(lowerQuery)
+    );
+    
+    selectedSearchIndex = searchResults.length > 0 ? 0 : -1;
+    renderSearchResults();
+}
+
+function renderSearchResults() {
+    const container = document.getElementById('searchResults');
+    
+    if (searchResults.length === 0) {
+        container.innerHTML = '<div class="p-8 text-center text-gray-400">Tidak ada barang ditemukan</div>';
+        return;
+    }
+    
+    let html = '<table class="w-full">';
+    html += '<thead class="bg-gray-100 sticky top-0"><tr>';
+    html += '<th class="px-4 py-2 text-left text-sm font-bold">KODE</th>';
+    html += '<th class="px-4 py-2 text-left text-sm font-bold">NAMA</th>';
+    html += '<th class="px-4 py-2 text-right text-sm font-bold">HARGA</th>';
+    html += '<th class="px-4 py-2 text-center text-sm font-bold">STOK</th>';
+    html += '</tr></thead><tbody>';
+    
+    searchResults.forEach((item, index) => {
+        const selectedClass = index === selectedSearchIndex ? 'search-item-selected' : '';
+        html += `<tr data-search-index="${index}" class="search-item-row ${selectedClass} border-b">`;
+        html += `<td class="px-4 py-3 text-sm">${item.kode_barang}</td>`;
+        html += `<td class="px-4 py-3 text-sm font-medium">${item.nama}</td>`;
+        html += `<td class="px-4 py-3 text-sm text-right">${formatRupiah(item.harga)}</td>`;
+        html += `<td class="px-4 py-3 text-sm text-center">${item.stok}</td>`;
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    
+    attachSearchRowEvents();
+    
+    if (selectedSearchIndex >= 0) {
+        const selectedRow = container.querySelector(`[data-search-index="${selectedSearchIndex}"]`);
+        if (selectedRow) {
+            selectedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+}
+
+function attachSearchRowEvents() {
+    document.querySelectorAll('.search-item-row').forEach(row => {
+        row.addEventListener('click', function() {
+            const index = parseInt(this.dataset.searchIndex);
+            addSearchItemToCart(index);
+        });
+    });
+}
+
+function moveSearchSelection(direction) {
+    if (searchResults.length === 0) return;
+    
+    if (direction === 'down') {
+        selectedSearchIndex = (selectedSearchIndex + 1) % searchResults.length;
+    } else if (direction === 'up') {
+        selectedSearchIndex = (selectedSearchIndex - 1 + searchResults.length) % searchResults.length;
+    }
+    
+    renderSearchResults();
+}
+
+function addSearchItemToCart(index) {
+    if (index < 0 || index >= searchResults.length) return;
+    
+    const item = searchResults[index];
+    addToCart(item.id, item.kode_barang, item.nama, item.harga, item.stok, item.diskon);
+    
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchInput').focus();
+    searchBarang('');
+}
+
+let searchTimeout;
+
+document.getElementById('searchInput').addEventListener('input', function(e) {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        searchBarang(e.target.value);
+    }, 150);
+});
+
+document.getElementById('btnCloseSearch').addEventListener('click', closeSearchModal);
+
 document.addEventListener('keydown', function(e) {
     const cashModal = document.getElementById('cashModal');
     const onlineModal = document.getElementById('onlineModal');
+    const searchModal = document.getElementById('searchModal');
     const isCashModalOpen = !cashModal.classList.contains('hidden');
     const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
+    const isSearchModalOpen = !searchModal.classList.contains('hidden');
+    
+    if (e.key === 'F12') {
+        e.preventDefault();
+        if (!isCashModalOpen && !isOnlineModalOpen && !isSearchModalOpen) {
+            showSearchModal();
+        }
+        return;
+    }
     
     if (e.key === 'Escape') {
         if (isCashModalOpen) {
             closeCashModal();
         } else if (isOnlineModalOpen && !isProcessingPayment) {
             closeOnlineModal();
+        } else if (isSearchModalOpen) {
+            closeSearchModal();
+        }
+        return;
+    }
+    
+    if (isSearchModalOpen) {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            moveSearchSelection('up');
+            return;
+        }
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            moveSearchSelection('down');
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedSearchIndex >= 0) {
+                addSearchItemToCart(selectedSearchIndex);
+            }
+            return;
         }
         return;
     }
@@ -599,12 +779,15 @@ document.addEventListener('keydown', function(e) {
 document.addEventListener('keypress', function(e) {
     const cashModal = document.getElementById('cashModal');
     const onlineModal = document.getElementById('onlineModal');
+    const searchModal = document.getElementById('searchModal');
     const isCashModalOpen = !cashModal.classList.contains('hidden');
     const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
+    const isSearchModalOpen = !searchModal.classList.contains('hidden');
     
-    if (e.target.tagName === 'INPUT' && (e.target.id === 'cashPaid' || e.target.id === 'pinInput')) return;
+    if (e.target.tagName === 'INPUT' && (e.target.id === 'cashPaid' || e.target.id === 'pinInput' || e.target.id === 'searchInput')) return;
     if (isCashModalOpen && e.target.tagName !== 'INPUT') return;
     if (isOnlineModalOpen && e.target.tagName !== 'INPUT') return;
+    if (isSearchModalOpen) return;
     
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     
@@ -712,18 +895,12 @@ function processCashPayment() {
     
     const cartData = cart.map(item => ({
         id: item.id,
-        kode_barang: item.kode_barang,
-        name: item.name,
-        qty: item.qty,
-        harga: item.price,
-        stok: item.stok,
-        diskon: item.diskon,
-        subtotal: item.price * item.qty
+        qty: item.qty
     }));
     
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = '/kasir2/checkout/tunai/process';
+    form.action = "{{ url('/kasir2/checkout/tunai/process') }}";
     
     const csrfToken = document.querySelector('meta[name="csrf-token"]');
     if (csrfToken) {
@@ -837,36 +1014,14 @@ function processOnlinePayment(rfid, pin) {
     document.getElementById('onlineProcessing').classList.remove('hidden');
     document.getElementById('pinStep').classList.add('hidden');
     
-    let totalSebelumDiskon = 0;
-    let totalDiskon = 0;
-    
-    const cartData = cart.map(item => {
-        const subtotalSebelum = item.price * item.qty;
-        const diskonNominal = Math.floor((item.diskon / 100) * subtotalSebelum);
-        const subtotal = subtotalSebelum - diskonNominal;
-        
-        totalSebelumDiskon += subtotalSebelum;
-        totalDiskon += diskonNominal;
-        
-        return {
-            id: item.id,
-            kode_barang: item.kode_barang,
-            name: item.name,
-            qty: item.qty,
-            harga: item.price,
-            stok: item.stok,
-            diskon: item.diskon,
-            diskon_nominal: diskonNominal,
-            subtotal: subtotal,
-            price: item.price
-        };
-    });
-    
-    const grandTotal = totalSebelumDiskon - totalDiskon;
+    const cartData = cart.map(item => ({
+        id: item.id,
+        qty: item.qty
+    }));
     
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = '/kasir2/checkout/online/process';
+    form.action = "{{ url('/kasir2/checkout/online/process') }}";
     
     const csrfToken = document.querySelector('meta[name="csrf-token"]');
     if (csrfToken) {
@@ -883,41 +1038,17 @@ function processOnlinePayment(rfid, pin) {
     itemsInput.value = JSON.stringify(cartData);
     form.appendChild(itemsInput);
     
-    const totalInput = document.createElement('input');
-    totalInput.type = 'hidden';
-    totalInput.name = 'total';
-    totalInput.value = totalSebelumDiskon;
-    form.appendChild(totalInput);
-    
-    const diskonInput = document.createElement('input');
-    diskonInput.type = 'hidden';
-    diskonInput.name = 'diskon_nominal';
-    diskonInput.value = totalDiskon;
-    form.appendChild(diskonInput);
-    
-    const grandTotalInput = document.createElement('input');
-    grandTotalInput.type = 'hidden';
-    grandTotalInput.name = 'grand_total';
-    grandTotalInput.value = grandTotal;
-    form.appendChild(grandTotalInput);
-    
-    const noCustInput = document.createElement('input');
-    noCustInput.type = 'hidden';
-    noCustInput.name = 'pid';
-    noCustInput.value = rfid;
-    form.appendChild(noCustInput);
+    const pidInput = document.createElement('input');
+    pidInput.type = 'hidden';
+    pidInput.name = 'pid';
+    pidInput.value = rfid;
+    form.appendChild(pidInput);
     
     const pinInput = document.createElement('input');
     pinInput.type = 'hidden';
     pinInput.name = 'pin';
     pinInput.value = pin;
     form.appendChild(pinInput);
-    
-    const cartDataInput = document.createElement('input');
-    cartDataInput.type = 'hidden';
-    cartDataInput.name = 'cart_data';
-    cartDataInput.value = JSON.stringify(cartData);
-    form.appendChild(cartDataInput);
     
     document.body.appendChild(form);
     form.submit();

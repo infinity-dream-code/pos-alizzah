@@ -14,7 +14,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
 
                 <div>
-                    <label class="block font-semibold mb-1 text-slate-700">Price Look-Up</label>
+                    <label class="block font-semibold mb-1 text-slate-700">PLU</label>
                     <input type="text" name="kode_barang"
                            value="{{ old('kode_barang') }}"
                            class="w-full px-4 py-3 border rounded-lg border-slate-300 focus:ring-indigo-500 focus:border-indigo-500">

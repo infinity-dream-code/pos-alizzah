@@ -15,7 +15,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
 
                 <div>
-                    <label class="block font-semibold mb-1 text-slate-700">Plu</label>
+                    <label class="block font-semibold mb-1 text-slate-700">PLU</label>
                     <input type="text" name="kode_barang" value="{{ $barang->kode_barang }}" readonly
                            class="w-full px-4 py-3 border rounded-lg bg-slate-100 text-slate-500 border-slate-300">
                 </div>
