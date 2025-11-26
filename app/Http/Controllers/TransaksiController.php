@@ -287,7 +287,7 @@ class TransaksiController extends Controller
             }
 
             DB::commit();
-            return redirect('/kasir')->with('success', 'Pembayaran berhasil! Kode: ' . $kode);
+            return redirect('/kasir')->with('success', 'Pembayaran berhasil!');
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect('/kasir')

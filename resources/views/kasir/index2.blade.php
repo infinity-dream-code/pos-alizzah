@@ -274,7 +274,16 @@ document.addEventListener('DOMContentLoaded', function() {
         <div id="pinStep" class="hidden">
             <div class="mb-4">
                 <label class="text-sm font-semibold text-gray-700">Masukkan PIN</label>
-                <input type="password" id="pinInput" maxlength="6" class="w-full mt-1 px-4 py-3 border-2 border-blue-300 rounded text-center text-2xl font-bold tracking-widest" placeholder="••••••" autocomplete="off">
+                <input
+    type="text"
+    id="pinInput"
+    name="pin_kasir_input"
+    inputmode="numeric"
+    maxlength="6"
+    autocomplete="off"
+    class="w-full mt-1 px-4 py-3 border-2 border-blue-300 rounded text-center text-2xl font-bold tracking-widest"
+    placeholder="••••••"
+/>
                 <p class="text-xs text-gray-500 mt-1 text-center">Tekan ENTER untuk membayar</p>
             </div>
         </div>
@@ -306,7 +315,68 @@ let isProcessingPayment = false;
 let currentRfid = '';
 let searchResults = [];
 let selectedSearchIndex = -1;
+let realPin = "";
 
+document.getElementById('pinInput').addEventListener('input', function(e) {
+    const cursorPos = this.selectionStart;
+    let val = this.value.replace(/[^0-9•]/g, "");
+    
+    // Hitung berapa bullet yang ada
+    const bulletCount = (this.value.match(/•/g) || []).length;
+    
+    // Ambil digit baru yang diinput
+    const newDigits = val.replace(/•/g, "");
+    
+    // Jika ada digit baru, tambahkan ke realPin
+    if (newDigits.length > 0) {
+        // Insert digit baru pada posisi cursor
+        const beforeCursor = realPin.substring(0, cursorPos - 1);
+        const afterCursor = realPin.substring(cursorPos - 1);
+        realPin = beforeCursor + newDigits + afterCursor;
+    } else if (val.length < bulletCount) {
+        // Jika panjang berkurang (backspace/delete)
+        realPin = realPin.substring(0, val.length);
+    }
+    
+    // Batasi maksimal 6 digit
+    if (realPin.length > 6) {
+        realPin = realPin.slice(0, 6);
+    }
+    
+    // Tampilkan sebagai bullet
+    this.value = "•".repeat(realPin.length);
+    
+    // Restore posisi cursor
+    const newCursorPos = Math.min(cursorPos, this.value.length);
+    this.setSelectionRange(newCursorPos, newCursorPos);
+});
+
+document.getElementById('pinInput').addEventListener('keydown', function(e) {
+    const cursorPos = this.selectionStart;
+    
+    if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (realPin.length > 0 && cursorPos > 0) {
+            realPin = realPin.slice(0, cursorPos - 1) + realPin.slice(cursorPos);
+            this.value = "•".repeat(realPin.length);
+            this.setSelectionRange(cursorPos - 1, cursorPos - 1);
+        }
+    } else if (e.key === 'Delete') {
+        e.preventDefault();
+        if (realPin.length > 0 && cursorPos < realPin.length) {
+            realPin = realPin.slice(0, cursorPos) + realPin.slice(cursorPos + 1);
+            this.value = "•".repeat(realPin.length);
+            this.setSelectionRange(cursorPos, cursorPos);
+        }
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // Biarkan arrow keys bekerja normal
+        return;
+    }
+});
+
+function getRealPin() {
+    return realPin;
+}
 const barangData = [
     @foreach($barangs as $b)
     {
@@ -1000,10 +1070,11 @@ document.getElementById('rfidInput').addEventListener('keypress', function(e) {
 
 document.getElementById('pinInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter' && !isProcessingPayment) {
-        const pin = e.target.value.trim();
-        if (pin && currentRfid) {
-            processOnlinePayment(currentRfid, pin);
-        }
+        const pin = getRealPin();
+if (pin && currentRfid) {
+    processOnlinePayment(currentRfid, pin);
+}
+
     }
 });
 
@@ -1044,12 +1115,12 @@ function processOnlinePayment(rfid, pin) {
     pidInput.value = rfid;
     form.appendChild(pidInput);
     
-    const pinInput = document.createElement('input');
-    pinInput.type = 'hidden';
-    pinInput.name = 'pin';
-    pinInput.value = pin;
-    form.appendChild(pinInput);
-    
+    const pinHidden = document.createElement('input');
+    pinHidden.type = 'hidden';
+    pinHidden.name = 'pin';
+    pinHidden.value = pin;
+    form.appendChild(pinHidden);
+
     document.body.appendChild(form);
     form.submit();
 }
