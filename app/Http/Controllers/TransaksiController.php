@@ -22,9 +22,9 @@ class TransaksiController extends Controller
         if ($request->search) {
             $query->where(function ($q) use ($request) {
                 $q->where('kode_transaksi', 'LIKE', '%' . $request->search . '%')
-                ->orWhereHas('user', function ($u) use ($request) {
-                    $u->where('nama', 'LIKE', '%' . $request->search . '%');
-                });
+                    ->orWhereHas('user', function ($u) use ($request) {
+                        $u->where('nama', 'LIKE', '%' . $request->search . '%');
+                    });
             });
         }
 
@@ -145,7 +145,6 @@ class TransaksiController extends Controller
 
             DB::commit();
             return redirect('/kasir')->with('success', 'Transaksi berhasil disimpan!');
-
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect('/kasir')->with('error', 'Kesalahan: ' . $e->getMessage());
@@ -247,7 +246,8 @@ class TransaksiController extends Controller
                     ->with('cart_data', $this->rebuildCart($cart));
             }
 
-            $kode = 'TRX-' . date('YmdHis');
+            $tanggal = Carbon::now('Asia/Jakarta');
+            $kode = 'TRX-' . $tanggal->format('YmdHis');
 
             $profit = 0;
             foreach ($items as $i) {
@@ -258,12 +258,12 @@ class TransaksiController extends Controller
 
             $transaksi = Transaksi::create([
                 'kode_transaksi' => $kode,
-                'tanggal' => now(),
+                'tanggal' => $tanggal,
                 'total' => $total,
                 'bayar' => $grand_total,
                 'kembalian' => 0,
                 'metode' => 'online',
-                'pelanggan_id' => null,
+                'pelanggan_id' => $pid,
                 'diskon_nominal' => $total_diskon,
                 'grand_total' => $grand_total,
                 'profit' => $profit,
@@ -288,7 +288,6 @@ class TransaksiController extends Controller
 
             DB::commit();
             return redirect('/kasir')->with('success', 'Pembayaran berhasil! Kode: ' . $kode);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect('/kasir')

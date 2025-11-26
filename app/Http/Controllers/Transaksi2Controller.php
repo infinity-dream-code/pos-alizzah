@@ -122,7 +122,7 @@ class Transaksi2Controller extends Controller
 
             $kembalian = $bayar - $total;
             $tanggal = Carbon::now('Asia/Jakarta');
-            $kode = 'TRX' . $tanggal->format('ymdHis');
+            $kode = 'TRX-' . $tanggal->format('YmdHis');
             $profit = $total - $total_modal;
 
             $transaksi = Transaksi::create([
@@ -293,17 +293,18 @@ class Transaksi2Controller extends Controller
                     ->with('cart_data', $this->rebuildCart($cart));
             }
 
-            $kode_transaksi = 'TRX' . date('ymdHis');
+            $tanggal = Carbon::now('Asia/Jakarta');
+            $kode_transaksi = 'TRX-' . $tanggal->format('YmdHis');
             $profit = ($total - $total_diskon) - $total_modal;
 
             $transaksi = Transaksi::create([
                 'kode_transaksi' => $kode_transaksi,
-                'tanggal' => now(),
+                'tanggal' => $tanggal,
                 'total' => $total,
                 'bayar' => $grand_total,
                 'kembalian' => 0,
                 'metode' => 'online',
-                'pelanggan_id' => null,
+                'pelanggan_id' => $pid,
                 'diskon_nominal' => $total_diskon,
                 'grand_total' => $grand_total,
                 'profit' => $profit,
