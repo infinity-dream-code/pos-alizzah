@@ -12,10 +12,10 @@ class BarangController extends Controller
         $search = $request->input('search');
 
         $barangs = Barang::when($search, function ($query, $search) {
-                return $query->where('kode_barang', 'like', "%{$search}%")
-                             ->orWhere('nama_barang', 'like', "%{$search}%");
-            })
-            ->paginate(10);
+            return $query->where('kode_barang', 'like', "%{$search}%")
+                ->orWhere('nama_barang', 'like', "%{$search}%");
+        })
+            ->paginate(20);
 
         return view('admin.barang.index', compact('barangs'));
     }

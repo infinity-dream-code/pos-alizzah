@@ -10,7 +10,7 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\TransaksiController;
 use App\Http\Controllers\Transaksi2Controller;
 use App\Http\Controllers\DiskonController;
-use App\Http\Controllers\StokController;
+use App\Http\Controllers\WaitingBarangController;
 
 Route::get('/', function () {
     return view('index');
@@ -22,10 +22,10 @@ Route::middleware(['auth', 'role:kasir'])->group(function () {
     Route::post('/kasir/checkout/tunai/process', [TransaksiController::class, 'processTunai'])
         ->name('transaksi.tunai');
 
-         Route::post('/kasir/checkout/online/process', [TransaksiController::class, 'processOnline'])
+    Route::post('/kasir/checkout/online/process', [TransaksiController::class, 'processOnline'])
         ->name('transaksi.online');
-
-        Route::get('/kasir2', [Transaksi2Controller::class, 'index'])->name('kasir2.index');
+    Route::post('/kasir/confirm-waiting', [TransaksiController::class, 'confirmWaitingBarang'])->name('kasir.confirm.waiting');
+    Route::get('/kasir2', [Transaksi2Controller::class, 'index'])->name('kasir2.index');
     Route::post('/kasir2/checkout/tunai/process', [Transaksi2Controller::class, 'processTunai'])->name('kasir2.tunai.process');
     Route::post('/kasir2/checkout/online/process', [Transaksi2Controller::class, 'processOnline'])->name('kasir2.online.process');
 });
@@ -47,43 +47,41 @@ Route::middleware(['role:admin'])->group(function () {
         Route::get('/cetak/{id}', [BarangController::class, 'cetak'])->name('barang.cetak');
     });
 
-Route::prefix('admin/laporan')->group(function () {
-    Route::get('/', [TransaksiController::class, 'laporan'])->name('laporan.index');
-    Route::get('/search', [TransaksiController::class, 'Search'])->name('laporan.search');
-    Route::get('/cetak/pdf', [TransaksiController::class, 'cetakPdf'])->name('laporan.cetak.pdf');
-});
+    Route::prefix('admin/laporan')->group(function () {
+        Route::get('/', [TransaksiController::class, 'laporan'])->name('laporan.index');
+        Route::get('/search', [TransaksiController::class, 'Search'])->name('laporan.search');
+        Route::get('/cetak/pdf', [TransaksiController::class, 'cetakPdf'])->name('laporan.cetak.pdf');
+    });
 
 
     Route::prefix('admin/user')->group(function () {
-    Route::get('/', [UserController::class, 'index'])->name('user.index');
-    Route::get('/create', [UserController::class, 'create'])->name('user.create');
-    Route::post('/store', [UserController::class, 'store'])->name('user.store');
-    Route::get('/edit/{id}', [UserController::class, 'edit'])->name('user.edit');
-    Route::put('/update/{id}', [UserController::class, 'update'])->name('user.update');
-    Route::delete('/destroy/{id}', [UserController::class, 'destroy'])->name('user.destroy');
-});
+        Route::get('/', [UserController::class, 'index'])->name('user.index');
+        Route::get('/create', [UserController::class, 'create'])->name('user.create');
+        Route::post('/store', [UserController::class, 'store'])->name('user.store');
+        Route::get('/edit/{id}', [UserController::class, 'edit'])->name('user.edit');
+        Route::put('/update/{id}', [UserController::class, 'update'])->name('user.update');
+        Route::delete('/destroy/{id}', [UserController::class, 'destroy'])->name('user.destroy');
+    });
 
-Route::prefix('admin/diskon')->group(function() {
-    Route::get('/', [DiskonController::class, 'index']);
-    Route::post('/store', [DiskonController::class, 'store']);
-    Route::post('/update/{id}', [DiskonController::class, 'update']);
-  Route::delete('/delete/{id}', [DiskonController::class, 'destroy']);
-    Route::post('/toggle-status/{id}', [DiskonController::class, 'toggleStatus']); 
-    Route::post('/update-mass', [DiskonController::class, 'updateMass']);
-    Route::post('/delete-mass', [DiskonController::class, 'deleteMass']);
-    Route::get('/search-products', [DiskonController::class, 'searchProducts']);
-});
+    Route::prefix('admin/diskon')->group(function () {
+        Route::get('/', [DiskonController::class, 'index']);
+        Route::post('/store', [DiskonController::class, 'store']);
+        Route::post('/update/{id}', [DiskonController::class, 'update']);
+        Route::delete('/delete/{id}', [DiskonController::class, 'destroy']);
+        Route::post('/toggle-status/{id}', [DiskonController::class, 'toggleStatus']);
+        Route::post('/update-mass', [DiskonController::class, 'updateMass']);
+        Route::post('/delete-mass', [DiskonController::class, 'deleteMass']);
+        Route::get('/search-products', [DiskonController::class, 'searchProducts']);
+    });
 
-Route::prefix('admin/stok')->group(function() {
-    Route::get('/', [StokController::class, 'index']);
-    Route::post('/store', [StokController::class, 'store']);
-    Route::get('/search-products', [StokController::class, 'searchProducts']);
-});
+    Route::prefix('admin/pembelian')->group(function () {
+        Route::get('/', [WaitingBarangController::class, 'index'])->name('waiting.index');
+        Route::post('/store', [WaitingBarangController::class, 'store'])->name('waiting.store');
+        Route::get('/search-products', [WaitingBarangController::class, 'searchProducts'])->name('waiting.search');
+    });
+
 
     Route::prefix('admin/transaksi')->group(function () {
-    Route::get('/', [TransaksiController::class, 'index'])->name('transaksi.index');
-    Route::delete('/destroy/{id}', [TransaksiController::class, 'destroy'])->name('transaksi.destroy');
-});
-
-
+        Route::get('/', [TransaksiController::class, 'index'])->name('transaksi.index');
+    });
 });

@@ -24,6 +24,10 @@ class Barang extends Model
     {
         return $this->hasMany(DetailTransaksi::class, 'barang_id');
     }
+    public function waitingBarang()
+    {
+        return $this->hasMany(WaitingBarang::class, 'barang_id');
+    }
 
     public function diskon()
     {

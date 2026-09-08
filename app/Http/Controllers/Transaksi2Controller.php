@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Transaksi;
 use App\Models\DetailTransaksi;
 use App\Models\Barang;
+use App\Models\WaitingBarang;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Firebase\JWT\JWT;
@@ -16,47 +17,78 @@ class Transaksi2Controller extends Controller
 {
     public function index()
     {
-        $barangs = Barang::with('diskon')
-            ->where('stok', '>', 0)
-            ->where('status', 'aktif')
-            ->get();
-    
-        return view('kasir.index2', compact('barangs'));
+        $barangs = Barang::with('diskon')->where('status', 'aktif')->get();
+        $waiting_barangs = WaitingBarang::with('barang')->get();
+        return view('kasir.index2', compact('barangs', 'waiting_barangs'));
     }
 
-    private function rebuildCart($cart)
+    private function prepareCartSessionData($cart)
     {
-        $newCart = [];
+        $cartData = [];
+        $waitingUsage = [];
+        $waitingConfirmed = [];
 
         foreach ($cart as $item) {
             $barang = Barang::find($item['id']);
-            if ($barang) {
-                $newCart[] = [
-                    'id' => $item['id'],
-                    'kode_barang' => $barang->kode_barang,
-                    'name' => $barang->nama_barang,
-                    'price' => $barang->harga_jual,
-                    'stok' => $barang->stok,
-                    'diskon' => $barang->diskon->nilai ?? 0,
-                    'qty' => $item['qty']
+            if (!$barang) continue;
+
+            $cartData[] = [
+                'id' => $barang->id,
+                'kode_barang' => $barang->kode_barang,
+                'name' => $barang->nama_barang,
+                'price' => $barang->harga_jual,
+                'stok' => $barang->stok,
+                'diskon' => $barang->diskon->nilai ?? 0,
+                'qty' => $item['qty']
+            ];
+
+            if (isset($item['waitingUsage']) && !empty($item['waitingUsage'])) {
+                $total = array_sum($item['waitingUsage']);
+                $waitingUsage[$barang->id] = [
+                    'total' => $total,
+                    'perWaiting' => $item['waitingUsage']
                 ];
+
+                foreach ($item['waitingUsage'] as $wid => $qty) {
+                    if ($qty > 0) {
+                        if (!isset($waitingConfirmed[$barang->id])) {
+                            $waitingConfirmed[$barang->id] = [];
+                        }
+                        $waitingConfirmed[$barang->id][$wid] = true;
+                    }
+                }
             }
         }
 
-        return $newCart;
+        return [
+            'cart' => $cartData,
+            'waiting_usage' => $waitingUsage,
+            'waiting_confirmed' => $waitingConfirmed
+        ];
     }
 
+    private function formatErrorMessage($message)
+    {
+        $parts = explode('|', $message);
+        if (count($parts) >= 3 && $parts[0] === "ERR") {
+            $saldo = (int)$parts[2];
+            if ($saldo <= 0) {
+                return "Saldo tidak cukup. Sisa saldo: Rp " . number_format(max(0, $saldo), 0, ',', '.');
+            }
+            return trim($parts[1]);
+        }
+        if (stripos($message, 'tidak ditemukan') !== false) return "Kartu tidak terdaftar";
+        if (stripos($message, 'blokir') !== false) return "Kartu diblokir";
+        if (stripos($message, 'saldo') !== false) return "Saldo tidak mencukupi";
+        if (stripos($message, 'pin salah') !== false) return "PIN yang Anda masukkan salah";
+        return $message;
+    }
     public function processTunai(Request $request)
     {
-        $request->validate([
-            'cart' => 'required|json',
-            'bayar' => 'required|string'
-        ]);
-
         DB::beginTransaction();
-
         try {
             $cart = json_decode($request->cart, true);
+            $bayar = (int) str_replace(['Rp', '.', ' '], '', $request->bayar);
 
             if (!$cart || count($cart) == 0) {
                 return redirect('/kasir2')->with('error', 'Keranjang kosong.');
@@ -64,66 +96,169 @@ class Transaksi2Controller extends Controller
 
             $items = [];
             $total = 0;
-            $total_modal = 0;
-            $errors = [];
+            $insufficientStock = [];
 
             foreach ($cart as $c) {
-                if (!isset($c['id']) || !isset($c['qty'])) {
-                    DB::rollBack();
-                    return redirect('/kasir2')->with('error', 'Data keranjang tidak valid.');
-                }
-
                 $barang = Barang::where('id', $c['id'])->lockForUpdate()->first();
-
                 if (!$barang) {
                     DB::rollBack();
-                    return redirect('/kasir2')
-                        ->with('error', 'Barang tidak ditemukan!')
-                        ->with('cart_data', $this->rebuildCart($cart));
+                    return redirect('/kasir2')->with('error', 'Barang tidak ditemukan!');
                 }
 
-                if ($barang->stok < $c['qty']) {
-                    $errors[] = "Stok {$barang->nama_barang} tidak mencukupi! Stok tersedia: {$barang->stok}";
+                $qty_needed = $c['qty'];
+
+                $waitingList = WaitingBarang::where('barang_id', $barang->id)
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                $waitingTotal = $waitingList->sum('stok');
+                $available_total = $barang->stok + $waitingTotal;
+
+                if ($qty_needed > $available_total) {
+                    $insufficientStock[] = [
+                        'barang_id' => $barang->id,
+                        'nama' => $barang->nama_barang,
+                        'requested' => $qty_needed,
+                        'available_qty' => $available_total,
+                        'stok' => $barang->stok
+                    ];
                 }
             }
 
-            if (!empty($errors)) {
+            if (!empty($insufficientStock)) {
                 DB::rollBack();
+                $errorMsg = '<div style="text-align:left;">';
+                $errorMsg .= '<p style="font-weight:bold; margin-bottom:10px;">Stok tidak mencukupi:</p>';
+                foreach ($insufficientStock as $item) {
+                    $errorMsg .= '<div style="background:#fee2e2; padding:8px; border-radius:6px; margin-bottom:8px;">';
+                    $errorMsg .= '<div style="font-weight:600; color:#991b1b;">' . $item['nama'] . '</div>';
+                    $errorMsg .= '<div style="font-size:13px; color:#7f1d1d;">Diminta: <b>' . $item['requested'] . '</b> pcs | ';
+                    $errorMsg .= 'Tersedia: <b>' . $item['available_qty'] . '</b> pcs</div>';
+                    $errorMsg .= '</div>';
+                }
+                $errorMsg .= '</div>';
+
+                $sessionData = $this->prepareCartSessionData($cart);
                 return redirect('/kasir2')
-                    ->with('error', implode('<br>', $errors))
-                    ->with('cart_data', $this->rebuildCart($cart));
+                    ->with('error', $errorMsg)
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('updated_stocks', $insufficientStock);
             }
 
             foreach ($cart as $c) {
                 $barang = Barang::where('id', $c['id'])->lockForUpdate()->first();
+                $qty_needed = $c['qty'];
 
-                $subtotal = $barang->harga_jual * $c['qty'];
-                $modal = $barang->harga_beli * $c['qty'];
+                $waitingList = WaitingBarang::where('barang_id', $barang->id)
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
 
-                $items[] = [
-                    'id' => $barang->id,
-                    'qty' => $c['qty'],
-                    'harga' => $barang->harga_jual,
-                    'subtotal' => $subtotal
-                ];
+                $qty_base = min($qty_needed, $barang->stok);
+                $waitingUsage = $c['waitingUsage'] ?? [];
+                $groupedItems = [];
 
-                $total += $subtotal;
-                $total_modal += $modal;
+                $lastWaitingHargaJual = null;
+                $lastWaitingHargaBeli = null;
+
+                if ($qty_base > 0) {
+                    $key = $barang->harga_jual . '_' . $barang->harga_beli;
+                    if (!isset($groupedItems[$key])) {
+                        $groupedItems[$key] = [
+                            'barang_id' => $barang->id,
+                            'qty' => 0,
+                            'harga' => $barang->harga_jual,
+                            'harga_beli' => $barang->harga_beli,
+                            'diskon' => 0,
+                            'diskon_nominal' => 0,
+                            'subtotal' => 0,
+                            'profit' => 0
+                        ];
+                    }
+                    $groupedItems[$key]['qty'] += $qty_base;
+                    $barang->stok -= $qty_base;
+                    $barang->save();
+                }
+
+                foreach ($waitingUsage as $wid => $wqty) {
+                    if ($wqty <= 0) continue;
+
+                    $waiting = $waitingList->firstWhere('id', $wid);
+                    if (!$waiting || $waiting->stok < $wqty) {
+                        DB::rollBack();
+                        return redirect('/kasir2')->with('error', 'Stok ' . $barang->nama_barang . ' tidak mencukupi!');
+                    }
+
+                    $key = $waiting->harga_jual . '_' . $waiting->harga_beli;
+                    if (!isset($groupedItems[$key])) {
+                        $groupedItems[$key] = [
+                            'barang_id' => $barang->id,
+                            'qty' => 0,
+                            'harga' => $waiting->harga_jual,
+                            'harga_beli' => $waiting->harga_beli,
+                            'diskon' => 0,
+                            'diskon_nominal' => 0,
+                            'subtotal' => 0,
+                            'profit' => 0
+                        ];
+                    }
+
+                    $groupedItems[$key]['qty'] += $wqty;
+                    $lastWaitingHargaJual = $waiting->harga_jual;
+                    $lastWaitingHargaBeli = $waiting->harga_beli;
+
+                    $waiting->stok -= $wqty;
+                    if ($waiting->stok <= 0) $waiting->delete();
+                    else $waiting->save();
+                }
+
+                foreach ($groupedItems as $item) {
+                    $subtotal = $item['harga'] * $item['qty'];
+                    $modal = $item['harga_beli'] * $item['qty'];
+                    $profit = $subtotal - $modal;
+
+                    $item['subtotal'] = $subtotal;
+                    $item['profit'] = $profit;
+
+                    $items[] = $item;
+                    $total += $subtotal;
+                }
+
+                $remainingWaiting = WaitingBarang::where('barang_id', $barang->id)
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($remainingWaiting->count() > 0) {
+                    $nextWaiting = $remainingWaiting->first();
+                    $barang->harga_beli = $nextWaiting->harga_beli;
+                    $barang->harga_jual = $nextWaiting->harga_jual;
+                    $barang->stok += $nextWaiting->stok;
+                    $barang->save();
+                    $nextWaiting->delete();
+                } else {
+                    if ($lastWaitingHargaJual !== null && $lastWaitingHargaBeli !== null) {
+                        $barang->harga_jual = $lastWaitingHargaJual;
+                        $barang->harga_beli = $lastWaitingHargaBeli;
+                        $barang->save();
+                    }
+                }
             }
-
-            $bayar = (int) str_replace(['Rp ', '.', ' '], '', $request->bayar);
 
             if ($bayar < $total) {
                 DB::rollBack();
-                return redirect('/kasir2')
-                    ->with('error', 'Uang kurang dari total pembayaran.')
-                    ->with('cart_data', $this->rebuildCart($cart));
+                return redirect('/kasir2')->with('error', 'Uang bayar kurang!');
             }
 
             $kembalian = $bayar - $total;
             $tanggal = Carbon::now('Asia/Jakarta');
             $kode = 'TRX-' . $tanggal->format('YmdHis');
-            $profit = $total - $total_modal;
+
+            $profit_total = 0;
+            foreach ($items as $i) $profit_total += $i['profit'];
 
             $transaksi = Transaksi::create([
                 'kode_transaksi' => $kode,
@@ -132,74 +267,37 @@ class Transaksi2Controller extends Controller
                 'bayar' => $bayar,
                 'kembalian' => $kembalian,
                 'metode' => 'tunai',
-                'pelanggan_id' => null,
                 'diskon_nominal' => 0,
                 'grand_total' => $total,
-                'profit' => $profit,
+                'profit' => $profit_total,
                 'user_id' => Auth::id()
             ]);
 
             foreach ($items as $i) {
                 DetailTransaksi::create([
                     'transaksi_id' => $transaksi->id,
-                    'barang_id' => $i['id'],
+                    'barang_id' => $i['barang_id'],
+                    'nama_barang' => Barang::find($i['barang_id'])->nama_barang,
                     'qty' => $i['qty'],
                     'harga' => $i['harga'],
-                    'diskon' => 0,
-                    'diskon_nominal' => 0,
-                    'subtotal' => $i['subtotal']
+                    'diskon' => $i['diskon'],
+                    'diskon_nominal' => $i['diskon_nominal'],
+                    'subtotal' => $i['subtotal'],
+                    'profit' => $i['profit']
                 ]);
-
-                $barang = Barang::find($i['id']);
-                $barang->stok -= $i['qty'];
-                $barang->save();
             }
 
             DB::commit();
-            return redirect('/kasir2')->with('success', 'Transaksi berhasil! Kode: ' . $kode);
-
+            return redirect('/kasir2')->with('success', 'Transaksi berhasil!');
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect('/kasir2')->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+            return redirect('/kasir2')->with('error', 'Kesalahan sistem: ' . $e->getMessage());
         }
-    }
-
-    private function formatErrorMessage($message)
-    {
-        if (stripos($message, 'siswa tidak ditemukan') !== false || stripos($message, 'customer tidak ditemukan') !== false) {
-            return 'Kartu tidak terdaftar';
-        }
-
-        if (stripos($message, 'pin') !== false && stripos($message, 'blokir') !== false) {
-            return 'Kartu telah diblokir';
-        }
-
-        if (stripos($message, 'PIN salah') !== false) {
-            return 'PIN yang Anda masukkan salah';
-        }
-
-        if (stripos($message, 'saldo') !== false && stripos($message, 'tidak') !== false) {
-            preg_match('/Saldo saat ini: (\d+)/', $message, $matches);
-            if (isset($matches[1])) {
-                $saldoSekarang = number_format($matches[1], 0, ',', '.');
-                return "Saldo tidak cukup. Saldo Anda: Rp {$saldoSekarang}";
-            }
-            return 'Saldo tidak mencukupi';
-        }
-
-        return $message;
     }
 
     public function processOnline(Request $request)
     {
-        $request->validate([
-            'items' => 'required|json',
-            'pid' => 'required|string',
-            'pin' => 'required|string'
-        ]);
-
         DB::beginTransaction();
-
         try {
             $cart = json_decode($request->items, true);
             $pid = $request->pid;
@@ -212,48 +310,168 @@ class Transaksi2Controller extends Controller
             $items = [];
             $total = 0;
             $total_diskon = 0;
-            $total_modal = 0;
+            $insufficientStock = [];
 
             foreach ($cart as $c) {
-                if (!isset($c['id']) || !isset($c['qty'])) {
-                    DB::rollBack();
-                    return redirect('/kasir2')->with('error', 'Data keranjang tidak valid.');
-                }
-
                 $barang = Barang::where('id', $c['id'])->lockForUpdate()->first();
-
                 if (!$barang) {
                     DB::rollBack();
-                    return redirect('/kasir2')
-                        ->with('error', 'Barang tidak ditemukan!')
-                        ->with('cart_data', $this->rebuildCart($cart));
+                    return redirect('/kasir2')->with('error', 'Barang tidak ditemukan!');
                 }
 
-                if ($barang->stok < $c['qty']) {
-                    DB::rollBack();
-                    return redirect('/kasir2')
-                        ->with('error', "Stok {$barang->nama_barang} tidak mencukupi! Stok tersedia: {$barang->stok}")
-                        ->with('cart_data', $this->rebuildCart($cart));
+                $qty_needed = $c['qty'];
+
+                $waitingList = WaitingBarang::where('barang_id', $barang->id)
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                $waitingTotal = $waitingList->sum('stok');
+                $available_total = $barang->stok + $waitingTotal;
+
+                if ($qty_needed > $available_total) {
+                    $insufficientStock[] = [
+                        'barang_id' => $barang->id,
+                        'nama' => $barang->nama_barang,
+                        'requested' => $qty_needed,
+                        'available_qty' => $available_total,
+                        'stok' => $barang->stok
+                    ];
+                }
+            }
+
+            if (!empty($insufficientStock)) {
+                DB::rollBack();
+
+                $errorMsg = '<div style="text-align:left;">';
+                $errorMsg .= '<p style="font-weight:bold; margin-bottom:10px;">Stok tidak mencukupi:</p>';
+                foreach ($insufficientStock as $item) {
+                    $errorMsg .= '<div style="background:#fee2e2; padding:8px; border-radius:6px; margin-bottom:8px;">';
+                    $errorMsg .= '<div style="font-weight:600; color:#991b1b;">' . $item['nama'] . '</div>';
+                    $errorMsg .= '<div style="font-size:13px; color:#7f1d1d;">Diminta: <b>' . $item['requested'] . '</b> pcs | ';
+                    $errorMsg .= 'Tersedia: <b>' . $item['available_qty'] . '</b> pcs</div>';
+                    $errorMsg .= '</div>';
+                }
+                $errorMsg .= '</div>';
+
+                $sessionData = $this->prepareCartSessionData($cart);
+                return redirect('/kasir2')
+                    ->with('error', $errorMsg)
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('use_discount', true)
+                    ->with('updated_stocks', $insufficientStock);
+            }
+
+            foreach ($cart as $c) {
+                $barang = Barang::where('id', $c['id'])->lockForUpdate()->first();
+                $qty_needed = $c['qty'];
+
+                $waitingList = WaitingBarang::where('barang_id', $barang->id)
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                $qty_base = min($qty_needed, $barang->stok);
+                $waitingUsage = $c['waitingUsage'] ?? [];
+                $groupedItems = [];
+
+                $lastWaitingHargaJual = null;
+                $lastWaitingHargaBeli = null;
+
+                if ($qty_base > 0) {
+                    $key = $barang->harga_jual . '_' . $barang->harga_beli;
+                    if (!isset($groupedItems[$key])) {
+                        $groupedItems[$key] = [
+                            'barang_id' => $barang->id,
+                            'qty' => 0,
+                            'harga' => $barang->harga_jual,
+                            'harga_beli' => $barang->harga_beli,
+                            'diskon' => $barang->diskon->nilai ?? 0,
+                            'diskon_nominal' => 0,
+                            'subtotal' => 0,
+                            'profit' => 0
+                        ];
+                    }
+                    $groupedItems[$key]['qty'] += $qty_base;
+                    $barang->stok -= $qty_base;
+                    $barang->save();
                 }
 
-                $subtotal = $barang->harga_jual * $c['qty'];
-                $diskon_persen = $barang->diskon->nilai ?? 0;
-                $diskon_nominal = floor(($diskon_persen / 100) * $subtotal);
-                $modal = $barang->harga_beli * $c['qty'];
+                foreach ($waitingUsage as $wid => $wqty) {
+                    if ($wqty <= 0) continue;
 
-                $items[] = [
-                    'id' => $barang->id,
-                    'qty' => $c['qty'],
-                    'harga' => $barang->harga_jual,
-                    'diskon' => $diskon_persen,
-                    'diskon_nominal' => $diskon_nominal,
-                    'subtotal' => $subtotal - $diskon_nominal,
-                    'modal' => $modal
-                ];
+                    $waiting = $waitingList->firstWhere('id', $wid);
+                    if (!$waiting || $waiting->stok < $wqty) {
+                        DB::rollBack();
+                        $sessionData = $this->prepareCartSessionData($cart);
+                        return redirect('/kasir2')
+                            ->with('error', 'Stok ' . $barang->nama_barang . ' tidak mencukupi!')
+                            ->with('cart_data', $sessionData['cart'])
+                            ->with('waiting_usage', $sessionData['waiting_usage'])
+                            ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                            ->with('use_discount', true);
+                    }
 
-                $total += $subtotal;
-                $total_diskon += $diskon_nominal;
-                $total_modal += $modal;
+                    $key = $waiting->harga_jual . '_' . $waiting->harga_beli;
+                    if (!isset($groupedItems[$key])) {
+                        $groupedItems[$key] = [
+                            'barang_id' => $barang->id,
+                            'qty' => 0,
+                            'harga' => $waiting->harga_jual,
+                            'harga_beli' => $waiting->harga_beli,
+                            'diskon' => $barang->diskon->nilai ?? 0,
+                            'diskon_nominal' => 0,
+                            'subtotal' => 0,
+                            'profit' => 0
+                        ];
+                    }
+
+                    $groupedItems[$key]['qty'] += $wqty;
+                    $lastWaitingHargaJual = $waiting->harga_jual;
+                    $lastWaitingHargaBeli = $waiting->harga_beli;
+
+                    $waiting->stok -= $wqty;
+                    if ($waiting->stok <= 0) $waiting->delete();
+                    else $waiting->save();
+                }
+
+                foreach ($groupedItems as $item) {
+                    $subtotal_sebelum = $item['harga'] * $item['qty'];
+                    $diskon = floor(($item['diskon'] / 100) * $subtotal_sebelum);
+                    $subtotal = $subtotal_sebelum - $diskon;
+                    $modal = $item['harga_beli'] * $item['qty'];
+                    $profit = $subtotal - $modal;
+
+                    $item['diskon_nominal'] = $diskon;
+                    $item['subtotal'] = $subtotal;
+                    $item['profit'] = $profit;
+
+                    $items[] = $item;
+                    $total += $subtotal_sebelum;
+                    $total_diskon += $diskon;
+                }
+
+                $remainingWaiting = WaitingBarang::where('barang_id', $barang->id)
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($remainingWaiting->count() > 0) {
+                    $nextWaiting = $remainingWaiting->first();
+                    $barang->harga_beli = $nextWaiting->harga_beli;
+                    $barang->harga_jual = $nextWaiting->harga_jual;
+                    $barang->stok += $nextWaiting->stok;
+                    $barang->save();
+                    $nextWaiting->delete();
+                } else {
+                    if ($lastWaitingHargaJual !== null && $lastWaitingHargaBeli !== null) {
+                        $barang->harga_jual = $lastWaitingHargaJual;
+                        $barang->harga_beli = $lastWaitingHargaBeli;
+                        $barang->save();
+                    }
+                }
             }
 
             $grand_total = $total - $total_diskon;
@@ -261,7 +479,7 @@ class Transaksi2Controller extends Controller
             $payload = [
                 "pid" => $pid,
                 "pin" => $pin,
-                "nominal" => intval($grand_total)
+                "nominal" => $grand_total
             ];
 
             $secretKey = "53c2f9aariasb60akenoa3dc29b60c3e1gremorye3c1701f4355fa4";
@@ -277,28 +495,38 @@ class Transaksi2Controller extends Controller
             if (!$response->successful()) {
                 DB::rollBack();
                 $res = $response->json();
-                $errorMsg = $res['message'] ?? 'Server pembayaran bermasalah';
+                $sessionData = $this->prepareCartSessionData($cart);
                 return redirect('/kasir2')
-                    ->with('error', $this->formatErrorMessage($errorMsg))
-                    ->with('cart_data', $this->rebuildCart($cart));
+                    ->with('error', $this->formatErrorMessage($res['message'] ?? 'Server pembayaran bermasalah'))
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('use_discount', true);
             }
 
             $res = $response->json();
-
             if (!isset($res['status']) || $res['status'] != 200) {
                 DB::rollBack();
-                $errorMsg = $res['message'] ?? 'Pembayaran gagal';
+                $sessionData = $this->prepareCartSessionData($cart);
                 return redirect('/kasir2')
-                    ->with('error', $this->formatErrorMessage($errorMsg))
-                    ->with('cart_data', $this->rebuildCart($cart));
+                    ->with('error', $this->formatErrorMessage($res['message'] ?? 'Pembayaran gagal'))
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('use_discount', true);
             }
 
+            $msg = explode('|', $res['message']);
+            $return_id = $msg[3] ?? null;
+
             $tanggal = Carbon::now('Asia/Jakarta');
-            $kode_transaksi = 'TRX-' . $tanggal->format('YmdHis');
-            $profit = ($total - $total_diskon) - $total_modal;
+            $kode = 'TRX-' . $tanggal->format('YmdHis');
+
+            $profit_total = 0;
+            foreach ($items as $i) $profit_total += $i['profit'];
 
             $transaksi = Transaksi::create([
-                'kode_transaksi' => $kode_transaksi,
+                'kode_transaksi' => $kode,
                 'tanggal' => $tanggal,
                 'total' => $total,
                 'bayar' => $grand_total,
@@ -307,33 +535,30 @@ class Transaksi2Controller extends Controller
                 'pelanggan_id' => $pid,
                 'diskon_nominal' => $total_diskon,
                 'grand_total' => $grand_total,
-                'profit' => $profit,
+                'profit' => $profit_total,
                 'user_id' => Auth::id()
             ]);
 
             foreach ($items as $i) {
                 DetailTransaksi::create([
                     'transaksi_id' => $transaksi->id,
-                    'barang_id' => $i['id'],
+                    'barang_id' => $i['barang_id'],
+                    'nama_barang' => Barang::find($i['barang_id'])->nama_barang,
                     'qty' => $i['qty'],
                     'harga' => $i['harga'],
                     'diskon' => $i['diskon'],
                     'diskon_nominal' => $i['diskon_nominal'],
-                    'subtotal' => $i['subtotal']
+                    'subtotal' => $i['subtotal'],
+                    'profit' => $i['profit'],
+                    'return' => $return_id
                 ]);
-
-                $barang = Barang::find($i['id']);
-                $barang->stok -= $i['qty'];
-                $barang->save();
             }
 
             DB::commit();
             return redirect('/kasir2')->with('success', 'Pembayaran berhasil!');
-
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect('/kasir2')
-                ->with('error', 'Terjadi kesalahan sistem: ' . $e->getMessage());
+            return redirect('/kasir2')->with('error', 'Kesalahan sistem: ' . $e->getMessage());
         }
     }
 }

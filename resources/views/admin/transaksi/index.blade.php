@@ -98,14 +98,7 @@
                                     Detail
                                 </button>
 
-                                <form action="{{ route('transaksi.destroy', $t->id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Yakin ingin menghapus transaksi ini?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" style="padding:8px 16px;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(239,68,68,0.3);transition:all 0.3s;display:inline-flex;align-items:center;gap:6px;">
-                                        <svg style="width:14px;height:14px;fill:white;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                                        Hapus
-                                    </button>
-                                </form>
+                              
                             </div>
                         </td>
                     </tr>
@@ -120,38 +113,11 @@
                     @endforelse
                 </tbody>
             </table>
+            <div style="padding: 20px;">
+    {{ $transaksis->links() }}
+</div>
         </div>
     </div>
-
-    @if($transaksis->hasPages())
-    <div style="margin-top:24px;display:flex;justify-content:center;">
-        <div style="background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);padding:12px 20px;display:inline-flex;gap:8px;align-items:center;border:1px solid #e2e8f0;">
-            @if ($transaksis->onFirstPage())
-                <span style="padding:8px 12px;color:#cbd5e1;font-weight:600;font-size:14px;">‹</span>
-            @else
-                <a href="{{ $transaksis->appends(request()->query())->previousPageUrl() }}" style="padding:8px 12px;color:#4f46e5;font-weight:600;text-decoration:none;border-radius:8px;transition:all 0.3s;font-size:14px;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">‹</a>
-            @endif
-
-            @foreach ($transaksis->getUrlRange(1, $transaksis->lastPage()) as $page => $url)
-                @if ($page == $transaksis->currentPage())
-                    <span style="padding:8px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border-radius:8px;font-weight:700;font-size:14px;box-shadow:0 2px 8px rgba(79,70,229,0.3);">{{ $page }}</span>
-                @else
-                    <a href="{{ $transaksis->appends(request()->query())->url($page) }}" style="padding:8px 14px;color:#64748b;font-weight:600;text-decoration:none;border-radius:8px;transition:all 0.3s;font-size:14px;" onmouseover="this.style.background='#f1f5f9';this.style.color='#4f46e5'" onmouseout="this.style.background='transparent';this.style.color='#64748b'">{{ $page }}</a>
-                @endif
-            @endforeach
-
-            @if ($transaksis->hasMorePages())
-                <a href="{{ $transaksis->appends(request()->query())->nextPageUrl() }}" style="padding:8px 12px;color:#4f46e5;font-weight:600;text-decoration:none;border-radius:8px;transition:all 0.3s;font-size:14px;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">›</a>
-            @else
-                <span style="padding:8px 12px;color:#cbd5e1;font-weight:600;font-size:14px;">›</span>
-            @endif
-        </div>
-    </div>
-
-    <div style="text-align:center;margin-top:16px;color:#64748b;font-size:14px;">
-        Menampilkan {{ $transaksis->firstItem() ?? 0 }} - {{ $transaksis->lastItem() ?? 0 }} dari {{ $transaksis->total() }} transaksi
-    </div>
-    @endif
 </div>
 
 <div id="detailModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;padding:20px;">

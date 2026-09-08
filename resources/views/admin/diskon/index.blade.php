@@ -840,6 +840,9 @@
         </tbody>
     </table>
 </div>
+<div style="padding: 20px;">
+    {{ $diskons->links() }}
+</div>
 
 <div class="modal" id="discountModal">
     <div class="modal-content">

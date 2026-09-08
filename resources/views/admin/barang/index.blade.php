@@ -103,38 +103,13 @@
                     @endforelse
                 </tbody>
             </table>
+            <div style="padding: 20px;">
+    {{ $barangs->links() }}
+</div>
         </div>
     </div>
 
-    @if($barangs->hasPages())
-    <div style="margin-top:24px;display:flex;justify-content:center;">
-        <div style="background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);padding:12px 20px;display:inline-flex;gap:8px;align-items:center;border:1px solid #e2e8f0;">
-            @if ($barangs->onFirstPage())
-                <span style="padding:8px 12px;color:#cbd5e1;font-weight:600;font-size:14px;">‹</span>
-            @else
-                <a href="{{ $barangs->previousPageUrl() }}&search={{ request('search') }} }}" style="padding:8px 12px;color:#4f46e5;font-weight:600;text-decoration:none;border-radius:8px;transition:all 0.3s;font-size:14px;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">‹</a>
-            @endif
 
-            @foreach ($barangs->getUrlRange(1, $barangs->lastPage()) as $page => $url)
-                @if ($page == $barangs->currentPage())
-                    <span style="padding:8px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border-radius:8px;font-weight:700;font-size:14px;box-shadow:0 2px 8px rgba(79,70,229,0.3);">{{ $page }}</span>
-                @else
-                    <a href="{{ $url }}&search={{ request('search') }} }}" style="padding:8px 14px;color:#64748b;font-weight:600;text-decoration:none;border-radius:8px;transition:all 0.3s;font-size:14px;" onmouseover="this.style.background='#f1f5f9';this.style.color='#4f46e5'" onmouseout="this.style.background='transparent';this.style.color='#64748b'">{{ $page }}</a>
-                @endif
-            @endforeach
-
-            @if ($barangs->hasMorePages())
-                <a href="{{ $barangs->nextPageUrl() }}&search={{ request('search') }} }}" style="padding:8px 12px;color:#4f46e5;font-weight:600;text-decoration:none;border-radius:8px;transition:all 0.3s;font-size:14px;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">›</a>
-            @else
-                <span style="padding:8px 12px;color:#cbd5e1;font-weight:600;font-size:14px;">›</span>
-            @endif
-        </div>
-    </div>
-
-    <div style="text-align:center;margin-top:16px;color:#64748b;font-size:14px;">
-        Menampilkan {{ $barangs->firstItem() ?? 0 }} - {{ $barangs->lastItem() ?? 0 }} dari {{ $barangs->total() }} barang
-    </div>
-    @endif
 </div>
 
 @endsection

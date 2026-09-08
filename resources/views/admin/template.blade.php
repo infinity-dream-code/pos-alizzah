@@ -391,12 +391,13 @@
     </svg>
     <span>Diskon</span>
 </a>
-<a href="{{ url('admin/stok') }}" class="menu-item {{ Request::is('admin/stok*') ? 'active' : '' }}">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-        <path d="M21 8.5l-9-5-9 5 9 5 9-5zm-9 7l-7-3.89v4.39L12 20l7-4v-4.39L12 15.5z"/>
+<a href="{{ url('admin/pembelian') }}" class="menu-item {{ Request::is('admin/pembelian*') ? 'active' : '' }}">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 3H5a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V5a2 2 0 0 0-2-2zm-3 10H8v-2h8v2zm0-4H8V7h8v2z"/>
     </svg>
-    <span>Stok</span>
+    <span>Pembelian</span>
 </a>
+
 
 
             <div class="menu-divider"></div>

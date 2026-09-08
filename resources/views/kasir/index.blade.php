@@ -23,32 +23,6 @@
             font-weight: bold;
             margin-left: 8px;
         }
-        .keyboard-guide {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(31, 41, 55, 0.95);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 12px;
-            z-index: 40;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .keyboard-guide-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 4px 0;
-        }
-        .keyboard-guide-key {
-            background: #374151;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-            min-width: 60px;
-            text-align: center;
-        }
         .spinner {
             border: 3px solid #f3f3f3;
             border-top: 3px solid #3b82f6;
@@ -72,6 +46,27 @@
             background-color: #bfdbfe;
             outline: 2px solid #3b82f6;
         }
+
+        .cart-table-container {
+        max-height: 45vh;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+    }
+
+    .waiting-table-container {
+        max-height: 20vh;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+    }
+
+    .waiting-table-container table thead {
+        position: sticky;
+        top: 0;
+        background: #ffedd5;
+        z-index: 2;
+    }
     </style>
 </head>
 
@@ -102,6 +97,187 @@ document.addEventListener('DOMContentLoaded', function() {
         confirmButtonColor: '#10b981',
         timer: 3000,
         timerProgressBar: true
+    });
+});
+</script>
+@endif
+
+@if (session('waiting_confirmation'))
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const waitingData = @json(session('waiting_confirmation'));
+    const barangInfo = @json(session('barang_info'));
+    
+    Swal.fire({
+    title: `
+        <div style="font-size:20px; font-weight:700; color:#1e293b;">
+            Harga Stok Baru Berbeda
+        </div>
+    `,
+    html: `
+        <div style="text-align:left; font-size:14px; color:#334155;">
+
+            <div style="margin-bottom:12px;">
+                <div style="font-size:13px; color:#64748b;">Nama Barang:</div>
+                <div style="font-size:17px; font-weight:600; color:#0f172a;">
+                    ${barangInfo.nama}
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+
+                <div style="
+                    padding:12px; 
+                    border-radius:10px; 
+                    border:1px solid #e2e8f0; 
+                    background:#f8fafc;
+                ">
+                    <div style="font-weight:600; margin-bottom:4px; color:#475569;">Harga Lama</div>
+                    <div style="font-size:12px; color:#64748b;">Beli</div>
+                    <div style="font-size:15px; font-weight:700; color:#1e293b;">
+                        Rp ${waitingData.harga_beli_lama.toLocaleString('id-ID')}
+                    </div>
+                    <div style="font-size:12px; margin-top:6px; color:#64748b;">Jual</div>
+                    <div style="font-size:15px; font-weight:700; color:#1e293b;">
+                        Rp ${waitingData.harga_jual_lama.toLocaleString('id-ID')}
+                    </div>
+                </div>
+
+                <div style="
+                    padding:12px; 
+                    border-radius:10px; 
+                    border:1px solid #bfdbfe; 
+                    background:#eff6ff;
+                ">
+                    <div style="font-weight:600; margin-bottom:4px; color:#2563eb;">Harga Baru</div>
+                    <div style="font-size:12px; color:#3b82f6;">Beli</div>
+                    <div style="font-size:15px; font-weight:700; color:#1e40af;">
+                        Rp ${waitingData.harga_beli_baru.toLocaleString('id-ID')}
+                    </div>
+                    <div style="font-size:12px; margin-top:6px; color:#3b82f6;">Jual</div>
+                    <div style="font-size:15px; font-weight:700; color:#1e40af;">
+                        Rp ${waitingData.harga_jual_baru.toLocaleString('id-ID')}
+                    </div>
+                </div>
+
+            </div>
+
+            <div style="
+                padding:10px; 
+                border-radius:10px; 
+                background:#fef9c3; 
+                border:1px solid #fde047;
+                margin-bottom:12px;
+                font-size:14px;
+            ">
+                Stok baru tersedia:
+                <strong>${waitingData.stok} pcs</strong>
+            </div>
+
+            <div style="text-align:center; font-weight:600; color:#1e293b; font-size:14px;">
+                Gunakan harga baru untuk stok berikutnya?
+            </div>
+        </div>
+    `,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "Ya, pakai harga baru",
+    cancelButtonText: "Batal",
+    buttonsStyling: false,
+    customClass: {
+        popup: "swal2-rounded swal2-shadow",
+        confirmButton: "swal2-confirm-btn",
+        cancelButton: "swal2-cancel-btn"
+    },
+    didRender: () => {
+        // Apply button styling manually
+        document.querySelector(".swal2-confirm-btn").style.cssText =
+            "padding:8px 20px; background:#2563eb; color:white; border-radius:8px; font-weight:600; border:none; margin:5px;";
+
+        document.querySelector(".swal2-cancel-btn").style.cssText =
+            "padding:8px 20px; background:#e2e8f0; color:#1e293b; border-radius:8px; font-weight:600; border:none; margin:5px;";
+    },
+    allowOutsideClick: false
+}).then((result) => {
+        if (result.isConfirmed) {
+            fetch("{{ url('/kasir/confirm-waiting') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({
+                    barang_id: barangInfo.id
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil!',
+                        text: 'Harga diupdate dan stok ditambahkan',
+                        confirmButtonColor: '#10b981',
+                        timer: 2000
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Gagal!',
+                        text: data.message || 'Terjadi kesalahan',
+                        confirmButtonColor: '#ef4444'
+                    });
+                }
+            });
+        }
+    });
+});
+</script>
+@endif
+
+@if (session('error'))
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    @if(session('updated_stocks'))
+        const updatedStocks = @json(session('updated_stocks'));
+    @endif
+
+    Swal.fire({
+        icon: 'error',
+        title: 'Error!',
+        html: '{!! addslashes(session('error')) !!}',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#ef4444',
+        allowOutsideClick: false,
+        allowEscapeKey: true
+    }).then(() => {
+        @if(session('updated_stocks'))
+            const updatedStocks = @json(session('updated_stocks'));
+            updatedStocks.forEach(update => {
+                const item = cart.find(i => i.id === update.barang_id);
+                if (item) {
+                    if (update.available_qty === 0) {
+                        cart = cart.filter(i => i.id !== update.barang_id);
+                        if (waitingUsage[update.barang_id]) delete waitingUsage[update.barang_id];
+                        if (waitingConfirmed[update.barang_id]) delete waitingConfirmed[update.barang_id];
+                    } else {
+                        item.qty = update.available_qty;
+                        item.stok = update.stok;
+                        distributeWaitingUsage(item, item.qty);
+                    }
+                }
+            });
+            
+            if (cart.length > 0) {
+                if (selectedItemIndex >= cart.length) selectedItemIndex = cart.length - 1;
+                scheduleRender();
+            } else {
+                selectedItemIndex = -1;
+                renderCart();
+            }
+        @endif
     });
 });
 </script>
@@ -175,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
 
         <div id="cartTable" class="hidden flex-1 flex flex-col min-h-0">
-            <div id="cartScrollContainer" class="flex-1 overflow-y-auto border border-gray-200 rounded mb-3">
+            <div id="cartScrollContainer" class="cart-table-container overflow-y-auto border border-gray-200 rounded mb-2">
                 <table class="w-full">
                     <thead class="bg-gray-800 text-white sticky top-0" style="z-index:1;">
                         <tr>
@@ -191,6 +367,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     <tbody id="cartTableBody"></tbody>
                 </table>
             </div>
+            <div id="usedWaitingSection" class="hidden mt-3">
+    <h3 class="text-sm font-bold text-gray-800">Detail Barang Waiting</h3>
+
+    <div class="waiting-table-container mt-2">
+        <table class="w-full text-sm">
+            <thead>
+                <tr>
+                    <th class="px-3 py-2 text-left">Nama</th>
+                    <th class="px-3 py-2 text-center">Qty</th>
+                    <th class="px-3 py-2 text-right">Harga</th>
+                </tr>
+            </thead>
+            <tbody id="usedWaitingBody"></tbody>
+        </table>
+    </div>
+</div>
 
             <div class="flex justify-between items-end">
                 <div>
@@ -202,7 +394,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                 </div>
 
-                <div class="bg-gray-100 px-6 py-3 rounded border-2 border-gray-300">
+
+                <div class="bg-gray-100 px-6 py-3 rounded border-2 border-gray-300 mt-5">
                     <div class="text-right">
                         <p id="diskonInfo" class="hidden text-xs text-red-600 mb-1 font-semibold">DISKON: <span id="totalDiskonAmount">Rp 0</span></p>
                         <p class="text-xs text-gray-600 mb-1 font-semibold">TOTAL</p>
@@ -264,6 +457,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="text" id="cashChange" class="w-full mt-1 px-4 py-2 bg-green-100 border rounded font-bold text-lg" readonly>
         </div>
 
+
+
         <button id="btnProcessCash" disabled class="w-full py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition">
             Bayar Sekarang<span class="keyboard-hint">ENTER</span>
         </button>
@@ -308,6 +503,8 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+
+
 <div id="notification" class="hidden fixed top-6 right-6 px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 z-50">
     <div class="flex items-center gap-3">
         <svg id="notifIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"></svg>
@@ -316,6 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <script>
 let cart = [];
+let waitingBarang = [];
 let barcodeBuffer = '';
 let barcodeTimeout = null;
 let useDiscount = false;
@@ -323,6 +521,15 @@ let selectedItemIndex = -1;
 let isProcessingPayment = false;
 let searchResults = [];
 let selectedSearchIndex = -1;
+let waitingUsage = {};
+let pendingWaiting = null;
+let allowIncrease = false;
+let waitingConfirmed = {};
+
+let isAddingToCart = false;
+let addToCartQueue = [];
+let isRendering = false;
+let renderTimeout = null;
 
 const barangData = [
     @foreach($barangs as $b)
@@ -337,10 +544,30 @@ const barangData = [
     @endforeach
 ];
 
+const waitingBarangData = [
+    @foreach($waiting_barangs ?? [] as $wb)
+    {
+        id: {{ $wb->id }},
+        barang_id: {{ $wb->barang_id }},
+        kode_barang: '{{ $wb->kode_barang }}',
+        nama: '{{ $wb->barang->nama_barang ?? 'Unknown' }}',
+        stok: {{ $wb->stok }},
+        harga_beli: {{ $wb->harga_beli ?? 0 }},
+        harga_jual: {{ $wb->harga_jual ?? 0 }}
+    },
+    @endforeach
+];
+
 @if(session('error') && session('cart_data'))
 cart = @json(session('cart_data'));
+waitingUsage = @json(session('waiting_usage') ?? []);
+waitingConfirmed = @json(session('waiting_confirmed') ?? []);
+useDiscount = {{ session('use_discount') ? 'true' : 'false' }};
 selectedItemIndex = 0;
-renderCart();
+requestAnimationFrame(() => {
+    renderCart();
+    renderUsedWaiting();
+});
 @endif
 
 function updateDateTime() {
@@ -381,30 +608,124 @@ function showNotification(message, type = 'success') {
     setTimeout(() => notif.classList.add('hidden'), 3000);
 }
 
+function processAddToCartQueue() {
+    if (isAddingToCart || addToCartQueue.length === 0) return;
+    
+    isAddingToCart = true;
+    const task = addToCartQueue.shift();
+    
+    try {
+        addToCartImmediate(task.id, task.kode_barang, task.name, task.price, task.stok, task.diskon);
+    } finally {
+        isAddingToCart = false;
+        if (addToCartQueue.length > 0) {
+            setTimeout(processAddToCartQueue, 10);
+        }
+    }
+}
+
 function addToCart(id, kode_barang, name, price, stok, diskon) {
+    addToCartQueue.push({ id, kode_barang, name, price, stok, diskon });
+    processAddToCartQueue();
+}
+
+function addToCartImmediate(id, kode_barang, name, price, stok, diskon) {
     const exists = cart.find(item => item.id === id);
     
     if (exists) {
-        if (exists.qty >= stok) {
+        const waitingList = waitingBarangData.filter(w => w.barang_id === id);
+        const waitingTotal = waitingList.reduce((a,b)=>a+b.stok,0);
+        const maxQty = stok + waitingTotal;
+        
+        if (exists.qty >= maxQty) {
             showNotification(`Stok ${name} tidak mencukupi!`, 'warning');
             return;
         }
-        exists.qty += 1;
+        
+        const newQty = exists.qty + 1;
+        const baseStok = stok;
+        
+        if (newQty > baseStok) {
+            const nextWaiting = getNextWaitingPrice(id, newQty, baseStok);
+            
+            if (nextWaiting) {
+                let currentPrice = exists.price;
+                
+                if (exists.qty > baseStok && waitingUsage[id] && waitingUsage[id].perWaiting) {
+                    const lastUsedWaitingId = Object.keys(waitingUsage[id].perWaiting)
+                        .filter(wid => waitingUsage[id].perWaiting[wid] > 0)
+                        .sort((a, b) => parseInt(b) - parseInt(a))[0];
+                    
+                    if (lastUsedWaitingId) {
+                        const lastW = waitingBarangData.find(w => w.id == lastUsedWaitingId);
+                        if (lastW) currentPrice = lastW.harga_jual;
+                    }
+                }
+                
+                if (nextWaiting.harga_jual !== currentPrice) {
+                    if (!waitingConfirmed[id] || !waitingConfirmed[id][nextWaiting.id]) {
+                        showWaitingPricePopup(exists, nextWaiting, newQty, baseStok);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        exists.qty = newQty;
+        distributeWaitingUsage(exists, newQty);
     } else {
         if (stok <= 0) {
-            showNotification(`${name} stok habis!`, 'error');
+            const waitingList = waitingBarangData.filter(w => w.barang_id === id);
+
+            if (waitingList.length === 0 || waitingList.reduce((a,b)=>a+b.stok,0) === 0) {
+                showNotification(`${name} stok habis!`, 'error');
+                return;
+            }
+
+            cart.push({ 
+                id, 
+                kode_barang, 
+                name, 
+                price, 
+                stok, 
+                diskon, 
+                qty: 1 
+            });
+
+            waitingUsage[id] = {
+                total: 1,
+                perWaiting: { [waitingList[0].id]: 1 }
+            };
+
+            scheduleRender();
             return;
         }
+
         cart.push({ id, kode_barang, name, price, stok, diskon, qty: 1 });
     }
     
-    renderCart();
+    scheduleRender();
     showNotification(`${name} ditambahkan`, 'success');
     
     if (selectedItemIndex === -1 && cart.length > 0) {
         selectedItemIndex = 0;
         highlightSelectedRow();
     }
+}
+
+function scheduleRender() {
+    if (renderTimeout) clearTimeout(renderTimeout);
+    
+    renderTimeout = setTimeout(() => {
+        if (!isRendering) {
+            isRendering = true;
+            requestAnimationFrame(() => {
+                renderCart();
+                renderUsedWaiting();
+                isRendering = false;
+            });
+        }
+    }, 50);
 }
 
 function addByBarcode(kodeBarang) {
@@ -417,110 +738,317 @@ function addByBarcode(kodeBarang) {
     }
 }
 
+function renderUsedWaiting() {
+    const body = document.getElementById('usedWaitingBody');
+    const section = document.getElementById('usedWaitingSection');
+
+    body.innerHTML = '';
+    let hasData = false;
+
+    for (const id in waitingUsage) {
+        const usage = waitingUsage[id];
+        if (!usage || usage.total === 0) continue;
+
+        hasData = true;
+        const item = cart.find(i => i.id == id);
+        if (!item) continue;
+        
+        for (const wid in usage.perWaiting) {
+            const qty = usage.perWaiting[wid];
+            if (qty > 0) {
+                const w = waitingBarangData.find(x => x.id == wid);
+                if (!w) continue;
+                
+                body.innerHTML += `
+                    <tr class="border-b">
+                        <td class="px-3 py-2">${item.name}</td>
+                        <td class="px-3 py-2 text-center">${qty}</td>
+                        <td class="px-3 py-2 text-right">${formatRupiah(w.harga_jual)}</td>
+                    </tr>
+                `;
+            }
+        }
+    }
+
+    if (hasData) section.classList.remove('hidden');
+    else section.classList.add('hidden');
+}
+
+function getNextWaitingPrice(barangId, currentQty, baseStok) {
+    const waitingList = waitingBarangData.filter(w => w.barang_id === barangId)
+        .sort((a, b) => a.id - b.id);
+
+    let accumulated = baseStok;
+    
+    for (const w of waitingList) {
+        accumulated += w.stok;
+        if (currentQty <= accumulated) {
+            return w;
+        }
+    }
+    
+    return null;
+}
+
+function showWaitingPricePopup(item, w, newQty, baseStok) {
+    let oldPrice = item.price;
+
+    if (item.qty > baseStok && waitingUsage[item.id] && waitingUsage[item.id].perWaiting) {
+        const lastUsedWaitingId = Object.keys(waitingUsage[item.id].perWaiting)
+            .filter(wid => waitingUsage[item.id].perWaiting[wid] > 0)
+            .sort((a, b) => parseInt(b) - parseInt(a))[0];
+        
+        if (lastUsedWaitingId) {
+            const lastW = waitingBarangData.find(wItem => wItem.id == lastUsedWaitingId);
+            if (lastW) oldPrice = lastW.harga_jual;
+        }
+    }
+
+    Swal.fire({
+        title: `
+            <div style="font-size:22px; font-weight:700; color:#1e293b;">
+                Perbedaan Harga Stok Baru
+            </div>
+        `,
+        html: `
+            <div style="text-align:left; font-size:15px; color:#334155; line-height:1.5;">
+                <div style="margin-bottom:15px;">
+                    <div style="color:#64748b; font-size:14px;">Barang:</div>
+                    <div style="font-weight:700; font-size:17px; color:#0f172a;">${item.name}</div>
+                </div>
+                <div style="display:flex; gap:12px; margin-bottom:15px;">
+                    <div style="flex:1;padding:12px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;">
+                        <div style="font-weight:600; margin-bottom:4px; color:#475569;">Harga Sebelumnya</div>
+                        <div style="font-size:20px; font-weight:700; margin-top:4px; color:#1e293b;">
+                            ${formatRupiah(oldPrice)}
+                        </div>
+                    </div>
+                    <div style="flex:1;padding:12px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;">
+                        <div style="font-weight:600; margin-bottom:4px; color:#2563eb;">Harga Baru</div>
+                        <div style="font-size:20px; font-weight:700; margin-top:4px; color:#1e40af;">
+                            ${formatRupiah(w.harga_jual)}
+                        </div>
+                        <div style="font-size:13px; color:#2563eb; margin-top:4px;">
+                            Stok tersedia: ${w.stok} pcs
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align:center; font-size:15px; font-weight:600; color:#1e293b;">
+                    Gunakan harga baru untuk stok yang baru masuk?
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Lanjut",
+        cancelButtonText: "Cancel",
+        buttonsStyling: false,
+        customClass: {
+            confirmButton: "swal-confirm",
+            cancelButton: "swal-cancel"
+        },
+        didRender: () => {
+            document.querySelector(".swal-confirm").style.cssText =
+                "padding:10px 18px; background:#2563eb; color:white; border:none; border-radius:8px; font-weight:600; margin-right:10px;";
+            document.querySelector(".swal-cancel").style.cssText =
+                "padding:10px 18px; background:#ef4444; color:white; border:none; border-radius:8px; font-weight:600;";
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            if (!waitingConfirmed[item.id]) {
+                waitingConfirmed[item.id] = {};
+            }
+            waitingConfirmed[item.id][w.id] = true;
+            
+            item.qty = newQty;
+            distributeWaitingUsage(item, newQty);
+            scheduleRender();
+        }
+    });
+}
+
+function distributeWaitingUsage(item, totalQty) {
+  const baseStok = item.stok;
+  const waitingList = waitingBarangData
+    .filter(w => w.barang_id === item.id)
+    .sort((a, b) => a.id - b.id);
+
+  let remaining = Math.max(totalQty - baseStok, 0);
+
+  if (!waitingUsage[item.id]) {
+    waitingUsage[item.id] = { total: 0, perWaiting: {} };
+  }
+
+  waitingUsage[item.id].perWaiting = {};
+  waitingUsage[item.id].total = remaining;
+
+  for (const w of waitingList) {
+    if (remaining <= 0) break;
+    const allocate = Math.min(remaining, w.stok);
+    waitingUsage[item.id].perWaiting[w.id] = allocate;
+    remaining -= allocate;
+  }
+}
+
+
+
 function renderCart() {
-    const tbody = document.getElementById("cartTableBody");
-    const empty = document.getElementById("cartEmpty");
-    const table = document.getElementById("cartTable");
-    const diskonHeader = document.getElementById("diskonHeader");
-    const diskonInfo = document.getElementById("diskonInfo");
-    
-    tbody.innerHTML = "";
-    
+    const tbody = document.getElementById('cartTableBody');
+    const empty = document.getElementById('cartEmpty');
+    const table = document.getElementById('cartTable');
+
     if (cart.length === 0) {
-        empty.classList.remove("hidden");
-        table.classList.add("hidden");
+        tbody.innerHTML = '';
+        table.classList.add('hidden');
+        empty.classList.remove('hidden');
         selectedItemIndex = -1;
         return;
     }
-    
-    empty.classList.add("hidden");
-    table.classList.remove("hidden");
-    
-    if (useDiscount) {
-        diskonHeader.classList.remove("hidden");
-        diskonInfo.classList.remove("hidden");
-    } else {
-        diskonHeader.classList.add("hidden");
-        diskonInfo.classList.add("hidden");
-    }
-    
-    let totalSebelumDiskon = 0;
+
+    table.classList.remove('hidden');
+    empty.classList.add('hidden');
+
+    tbody.innerHTML = '';
+    let total = 0;
     let totalDiskon = 0;
-    
+
     cart.forEach((item, index) => {
-        const subtotalSebelum = item.price * item.qty;
-        const diskonNominal = useDiscount ? Math.floor((item.diskon / 100) * subtotalSebelum) : 0;
-        const subtotal = subtotalSebelum - diskonNominal;
-        
-        totalSebelumDiskon += subtotalSebelum;
+        const baseQty = Math.min(item.qty, item.stok);
+        const subtotalBase = baseQty * item.price;
+
+        let subtotalWaiting = 0;
+        if (waitingUsage[item.id] && waitingUsage[item.id].perWaiting) {
+            for (const wid in waitingUsage[item.id].perWaiting) {
+                const qty = waitingUsage[item.id].perWaiting[wid];
+                const w = waitingBarangData.find(x => x.id == wid);
+                if (w) {
+                    subtotalWaiting += qty * w.harga_jual;
+                }
+            }
+        }
+
+        const subtotal = subtotalBase + subtotalWaiting;
+
+        let diskonNominal = 0;
+        if (useDiscount && item.diskon > 0) {
+            diskonNominal = Math.floor((item.diskon / 100) * subtotal);
+        }
+
+        total += subtotal;
         totalDiskon += diskonNominal;
-        
-        const diskonCell = useDiscount ? `<td class="px-3 py-2 text-right text-sm text-red-600">${item.diskon}% (${formatRupiah(diskonNominal)})</td>` : '';
-        
-        const rowClass = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
-        
+
+        let displayPrice = item.price;
+        if (item.stok <= 0) {
+            const w = waitingBarangData.find(wb => wb.barang_id === item.id);
+            if (w) displayPrice = w.harga_jual;
+        }
+
         tbody.innerHTML += `
-            <tr data-row-index="${index}" class="cart-row ${rowClass}">
-                <td class="px-3 py-2 text-sm font-semibold">${index + 1}</td>
+            <tr class="cart-row border-b" data-row-index="${index}">
+                <td class="px-3 py-2 text-sm">${index + 1}</td>
                 <td class="px-3 py-2 text-sm">${item.kode_barang}</td>
-                <td class="px-3 py-2 text-sm font-medium">${item.name}</td>
-                <td class="px-3 py-2">
-                    <div class="flex items-center justify-center gap-1">
-                        <button data-item-id="${item.id}" data-action="minus" class="qty-btn px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-bold">−</button>
-                        <span class="font-bold text-sm min-w-[2rem] text-center">${item.qty}</span>
-                        <button data-item-id="${item.id}" data-action="plus" class="qty-btn px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-bold ${item.qty >= item.stok ? 'opacity-50' : ''}">+</button>
+                <td class="px-3 py-2 text-sm">${item.name}</td>
+                <td class="px-3 py-2 text-center text-sm font-bold">
+                    <div class="flex justify-center items-center gap-2">
+                        <button 
+                            class="qty-btn bg-red-500 text-white px-2 py-1 rounded text-xs font-bold hover:bg-red-600"
+                            data-item-id="${item.id}" 
+                            data-action="minus"
+                        >−</button>
+                        <span class="min-w-[20px] inline-block">${item.qty}</span>
+                        <button 
+                            class="qty-btn bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold hover:bg-blue-600"
+                            data-item-id="${item.id}" 
+                            data-action="plus"
+                        >+</button>
                     </div>
                 </td>
-                <td class="px-3 py-2 text-right text-sm">${formatRupiah(item.price)}</td>
-                ${diskonCell}
-                <td class="px-3 py-2 text-right text-sm font-bold">${formatRupiah(subtotal)}</td>
+                <td class="px-3 py-2 text-right text-sm">${formatRupiah(displayPrice)}</td>
+                <td class="px-3 py-2 text-right text-sm ${useDiscount ? '' : 'hidden'}">${formatRupiah(diskonNominal)}</td>
+                <td class="px-3 py-2 text-right text-sm font-bold">${formatRupiah(subtotal - diskonNominal)}</td>
             </tr>
         `;
     });
-    
-    const grandTotal = totalSebelumDiskon - totalDiskon;
-    
-    document.getElementById('totalAmount').textContent = formatRupiah(grandTotal);
-    document.getElementById('totalDiskonAmount').textContent = formatRupiah(totalDiskon);
-    
-    attachQtyButtonEvents();
-    highlightSelectedRow();
-}
 
-function attachQtyButtonEvents() {
-    document.querySelectorAll('.qty-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const itemId = parseInt(this.dataset.itemId);
-            const action = this.dataset.action;
-            updateQty(itemId, action === 'plus' ? 1 : -1);
-        });
-    });
+   
+
+    document.getElementById('totalAmount').textContent = formatRupiah(total - totalDiskon);
+
+    if (useDiscount) {
+        document.getElementById('diskonHeader').classList.remove('hidden');
+        document.getElementById('diskonInfo').classList.remove('hidden');
+        document.getElementById('totalDiskonAmount').textContent = formatRupiah(totalDiskon);
+    } else {
+        document.getElementById('diskonHeader').classList.add('hidden');
+        document.getElementById('diskonInfo').classList.add('hidden');
+    }
+
+    highlightSelectedRow();
+    
 }
 
 function updateQty(id, change) {
     const item = cart.find(i => i.id === id);
     if (!item) return;
-    
+
     const newQty = item.qty + change;
-    
-    if (newQty > item.stok) {
-        showNotification(`Stok tidak mencukupi!`, 'warning');
-        return;
-    }
-    
-    item.qty = newQty;
-    
-    if (item.qty <= 0) {
-        const itemIndex = cart.findIndex(i => i.id === id);
-        cart = cart.filter(i => i.id !== id);
+    if (newQty < 1) {
+  cart = cart.filter(i => i.id !== id);
+
+  if (waitingUsage[id]) delete waitingUsage[id];
+  if (waitingConfirmed[id]) delete waitingConfirmed[id]; 
+
+  if (selectedItemIndex >= cart.length) selectedItemIndex = cart.length - 1;
+  scheduleRender();
+  showNotification(`${item.name} dihapus`, 'success');
+  return;
+}
+
+
+
+    const baseStok = item.stok;
+    const waitingList = waitingBarangData.filter(w => w.barang_id === id)
+        .sort((a, b) => a.id - b.id);
+    const waitingTotal = waitingList.reduce((a,b)=>a+b.stok,0);
+    const maxQty = baseStok + waitingTotal;
+
+    if (change === 1 && newQty > maxQty) {
+    showNotification('Stok habis!', 'error');
+    return;
+}
+
+    if (change === 1 && newQty > baseStok) {
+        const nextWaiting = getNextWaitingPrice(id, newQty, baseStok);
         
-        if (selectedItemIndex >= cart.length) {
-            selectedItemIndex = cart.length - 1;
+        if (nextWaiting) {
+            let currentPrice = item.price;
+
+            if (item.qty > baseStok && waitingUsage[id] && waitingUsage[id].perWaiting) {
+                const lastUsedWaitingId = Object.keys(waitingUsage[id].perWaiting)
+                    .filter(wid => waitingUsage[id].perWaiting[wid] > 0)
+                    .sort((a, b) => parseInt(b) - parseInt(a))[0];
+                
+                if (lastUsedWaitingId) {
+                    const lastW = waitingBarangData.find(w => w.id == lastUsedWaitingId);
+                    if (lastW) currentPrice = lastW.harga_jual;
+                }
+            }
+
+            if (nextWaiting.harga_jual !== currentPrice) {
+                if (!waitingConfirmed[id] || !waitingConfirmed[id][nextWaiting.id]) {
+                    showWaitingPricePopup(item, nextWaiting, newQty, baseStok);
+                    return;
+                }
+            }
         }
     }
-    
-    renderCart();
+
+    item.qty = newQty;
+    distributeWaitingUsage(item, newQty);
+    scheduleRender();
 }
+
+
+
 
 function highlightSelectedRow() {
     document.querySelectorAll('.cart-row').forEach(row => {
@@ -535,6 +1063,33 @@ function highlightSelectedRow() {
         }
     }
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderCart();
+
+  const tbody = document.getElementById("cartTableBody");
+
+  tbody.addEventListener("click", (e) => {
+    const btn = e.target.closest(".qty-btn");
+    if (!btn) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const itemId = parseInt(btn.dataset.itemId, 10);
+    const action = btn.dataset.action;
+    updateQty(itemId, action === "plus" ? 1 : -1);
+  }, true);
+
+  tbody.addEventListener("click", (e) => {
+    const row = e.target.closest(".cart-row");
+    if (!row) return;
+
+    selectedItemIndex = parseInt(row.dataset.rowIndex, 10);
+    highlightSelectedRow();
+  });
+});
+
 
 function moveSelection(direction) {
     if (cart.length === 0) return;
@@ -560,18 +1115,23 @@ function updateSelectedItemQty(change) {
 }
 
 function deleteSelectedItem() {
-    if (selectedItemIndex < 0 || selectedItemIndex >= cart.length) return;
-    
-    const item = cart[selectedItemIndex];
-    cart = cart.filter(i => i.id !== item.id);
-    
-    if (selectedItemIndex >= cart.length) {
-        selectedItemIndex = cart.length - 1;
-    }
-    
-    renderCart();
-    showNotification(`${item.name} dihapus`, 'success');
+  if (selectedItemIndex < 0 || selectedItemIndex >= cart.length) return;
+
+  const item = cart[selectedItemIndex];
+  cart = cart.filter(i => i.id !== item.id);
+
+  if (waitingUsage[item.id]) delete waitingUsage[item.id];
+  if (waitingConfirmed[item.id]) delete waitingConfirmed[item.id]; 
+
+  if (selectedItemIndex >= cart.length) {
+    selectedItemIndex = cart.length - 1;
+  }
+
+  scheduleRender();
+  showNotification(`${item.name} dihapus`, 'success');
 }
+
+
 
 function showSearchModal() {
     document.getElementById('searchModal').classList.remove('hidden');
@@ -691,408 +1251,490 @@ document.getElementById('btnCloseSearch').addEventListener('click', closeSearchM
 document.addEventListener('keydown', function(e) {
     const cashModal = document.getElementById('cashModal');
     const onlineModal = document.getElementById('onlineModal');
-    const searchModal = document.getElementById('searchModal');
-    const isCashModalOpen = !cashModal.classList.contains('hidden');
-    const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
-    const isSearchModalOpen = !searchModal.classList.contains('hidden');
-    
-    if (e.key === 'F12') {
-        e.preventDefault();
-        if (!isCashModalOpen && !isOnlineModalOpen && !isSearchModalOpen) {
-            showSearchModal();
-        }
-        return;
+const searchModal = document.getElementById('searchModal');
+const isCashModalOpen = !cashModal.classList.contains('hidden');
+const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
+const isSearchModalOpen = !searchModal.classList.contains('hidden');
+
+if (e.key === 'F12') {
+    e.preventDefault();
+    if (!isCashModalOpen && !isOnlineModalOpen && !isSearchModalOpen) {
+        showSearchModal();
     }
-    
-    if (e.key === 'Escape') {
-        if (isCashModalOpen) {
-            closeCashModal();
-        } else if (isOnlineModalOpen && !isProcessingPayment) {
-            closeOnlineModal();
-        } else if (isSearchModalOpen) {
-            closeSearchModal();
-        }
-        return;
-    }
-    
-    if (isSearchModalOpen) {
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            moveSearchSelection('up');
-            return;
-        }
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            moveSearchSelection('down');
-            return;
-        }
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (selectedSearchIndex >= 0) {
-                addSearchItemToCart(selectedSearchIndex);
-            }
-            return;
-        }
-        return;
-    }
-    
+    return;
+}
+
+if (e.key === 'Escape') {
     if (isCashModalOpen) {
-        if (e.key === 'Enter') {
-            const btn = document.getElementById('btnProcessCash');
-            if (!btn.disabled) {
-                processCashPayment();
-            }
-        }
-        return;
+        closeCashModal();
+    } else if (isOnlineModalOpen && !isProcessingPayment) {
+        closeOnlineModal();
+    } else if (isSearchModalOpen) {
+        closeSearchModal();
     }
-    
-    if (isOnlineModalOpen) {
-        return;
-    }
-    
-    if (e.key === 'F1') {
-        e.preventDefault();
-        showCashPayment();
-        return;
-    }
-    
-    if (e.key === 'F2') {
-        e.preventDefault();
-        showOnlinePayment();
-        return;
-    }
-    
+    return;
+}
+
+if (isSearchModalOpen) {
     if (e.key === 'ArrowUp') {
         e.preventDefault();
-        moveSelection('up');
+        moveSearchSelection('up');
         return;
     }
-    
     if (e.key === 'ArrowDown') {
         e.preventDefault();
-        moveSelection('down');
+        moveSearchSelection('down');
         return;
     }
-    
-    if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        updateSelectedItemQty(1);
-        return;
-    }
-    
-    if (e.key === '-' || e.key === '_') {
-        e.preventDefault();
-        updateSelectedItemQty(-1);
-        return;
-    }
-    
-    if (e.key === 'Delete') {
-        e.preventDefault();
-        deleteSelectedItem();
-        return;
-    }
-});
-
-document.addEventListener('keypress', function(e) {
-    const cashModal = document.getElementById('cashModal');
-    const onlineModal = document.getElementById('onlineModal');
-    const searchModal = document.getElementById('searchModal');
-    const isCashModalOpen = !cashModal.classList.contains('hidden');
-    const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
-    const isSearchModalOpen = !searchModal.classList.contains('hidden');
-    
-    if (e.target.tagName === 'INPUT' && e.target.id === 'cashPaid') return;
-    if (e.target.tagName === 'INPUT' && e.target.id === 'searchInput') return;
-    if (isCashModalOpen && e.target.tagName !== 'INPUT') return;
-    if (isOnlineModalOpen && e.target.tagName !== 'INPUT') return;
-    if (isSearchModalOpen) return;
-    
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    
-    clearTimeout(barcodeTimeout);
-    
     if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedSearchIndex >= 0) {
+            addSearchItemToCart(selectedSearchIndex);
+        }
+        return;
+    }
+    return;
+}
+
+if (isCashModalOpen) {
+    if (e.key === 'Enter') {
+        const btn = document.getElementById('btnProcessCash');
+        if (!btn.disabled) {
+            processCashPayment();
+        }
+    }
+    return;
+}
+
+if (isOnlineModalOpen) {
+    return;
+}
+
+if (e.key === 'F1') {
+    e.preventDefault();
+    showCashPayment();
+    return;
+}
+
+if (e.key === 'F2') {
+    e.preventDefault();
+    showOnlinePayment();
+    return;
+}
+
+if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    moveSelection('up');
+    return;
+}
+
+if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    moveSelection('down');
+    return;
+}
+
+if (e.key === '+' || e.key === '=') {
+    e.preventDefault();
+    updateSelectedItemQty(1);
+    return;
+}
+
+if (e.key === '-' || e.key === '_') {
+    e.preventDefault();
+    updateSelectedItemQty(-1);
+    return;
+}
+
+if (e.key === 'Delete') {
+    e.preventDefault();
+    deleteSelectedItem();
+    return;
+}
+});
+document.addEventListener('keypress', function(e) {
+const cashModal = document.getElementById('cashModal');
+const onlineModal = document.getElementById('onlineModal');
+const searchModal = document.getElementById('searchModal');
+const isCashModalOpen = !cashModal.classList.contains('hidden');
+const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
+const isSearchModalOpen = !searchModal.classList.contains('hidden');
+if (e.target.tagName === 'INPUT' && e.target.id === 'cashPaid') return;
+if (e.target.tagName === 'INPUT' && e.target.id === 'searchInput') return;
+if (isCashModalOpen && e.target.tagName !== 'INPUT') return;
+if (isOnlineModalOpen && e.target.tagName !== 'INPUT') return;
+if (isSearchModalOpen) return;
+
+if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+clearTimeout(barcodeTimeout);
+
+if (e.key === 'Enter') {
+    if (barcodeBuffer.trim().length > 0) {
+        addByBarcode(barcodeBuffer.trim());
+        barcodeBuffer = '';
+    }
+} else {
+    barcodeBuffer += e.key;
+    barcodeTimeout = setTimeout(() => {
         if (barcodeBuffer.trim().length > 0) {
             addByBarcode(barcodeBuffer.trim());
-            barcodeBuffer = '';
         }
-    } else {
-        barcodeBuffer += e.key;
-        barcodeTimeout = setTimeout(() => {
-            if (barcodeBuffer.trim().length > 0) {
-                addByBarcode(barcodeBuffer.trim());
-            }
-            barcodeBuffer = '';
-        }, 100);
-    }
+        barcodeBuffer = '';
+    }, 100);
+}
 });
-
 document.getElementById('btnCash').addEventListener('click', showCashPayment);
 document.getElementById('btnOnline').addEventListener('click', showOnlinePayment);
 document.getElementById('btnCloseCash').addEventListener('click', closeCashModal);
 document.getElementById('btnCloseOnline').addEventListener('click', function() {
-    if (!isProcessingPayment) {
-        closeOnlineModal();
-    }
+if (!isProcessingPayment) {
+closeOnlineModal();
+}
 });
 document.getElementById('btnLogout').addEventListener('click', function () {
-    if (confirm('Yakin ingin logout?')) {
-        document.getElementById('logoutForm').submit();
-    }
+if (confirm('Yakin ingin logout?')) {
+document.getElementById('logoutForm').submit();
+}
 });
-
 function showCashPayment() {
-    if (cart.length === 0) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Error!',
-            text: 'Keranjang kosong!',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#ef4444'
-        });
-        return;
-    }
-    
-    const hasStockError = cart.some(item => item.qty > item.stok);
-    if (hasStockError) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Error!',
-            text: 'Ada barang yang melebihi stok!',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#ef4444'
-        });
-        return;
-    }
-    
-    useDiscount = false;
-    renderCart();
-    
-    const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-    document.getElementById('cashTotal').value = formatRupiah(total);
-    document.getElementById('cashTotal').dataset.total = total;
-    document.getElementById('cashPaid').value = '';
-    document.getElementById('cashChange').value = '';
-    document.getElementById('btnProcessCash').disabled = true;
-    document.getElementById('btnProcessCash').className = 'w-full py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition';
-    
-    document.getElementById('cashModal').classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    
-    setTimeout(() => document.getElementById('cashPaid').focus(), 100);
+if (cart.length === 0) {
+Swal.fire({
+icon: 'error',
+title: 'Error!',
+text: 'Keranjang kosong!',
+confirmButtonText: 'OK',
+confirmButtonColor: '#ef4444'
+});
+return;
 }
-
-function closeCashModal() {
-    document.getElementById('cashModal').classList.add('hidden');
-    document.body.style.overflow = 'auto';
-}
-
-document.getElementById('cashPaid').addEventListener('input', function() {
-    let raw = this.value.replace(/[^0-9]/g, "");
-    this.value = formatRupiah(raw);
-    
-    let total = parseInt(document.getElementById('cashTotal').dataset.total);
-    let paid = parseInt(raw);
-    let btn = document.getElementById('btnProcessCash');
-    
-    if (paid >= total) {
-        document.getElementById('cashChange').value = formatRupiah(paid - total);
-        btn.disabled = false;
-        btn.className = 'w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded font-semibold transition';
-    } else {
-        document.getElementById('cashChange').value = 'Belum cukup';
-        btn.disabled = true;
-        btn.className = 'w-full py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition';
-    }
+const barangMelebihiStok = cart.filter(item => {
+    const baseStok = item.stok;
+    const waitingList = waitingBarangData.filter(w => w.barang_id === item.id);
+    const waitingTotal = waitingList.reduce((a,b)=>a+b.stok,0);
+    const maxQty = baseStok + waitingTotal;
+    return item.qty > maxQty;
 });
 
-document.getElementById('btnProcessCash').addEventListener('click', processCashPayment);
+if (barangMelebihiStok.length > 0) {
+    const listBarang = barangMelebihiStok.map(item => {
+        const baseStok = item.stok;
+        const waitingList = waitingBarangData.filter(w => w.barang_id === item.id);
+        const waitingTotal = waitingList.reduce((a, b) => a + b.stok, 0);
+        const maxQty = baseStok + waitingTotal;
+        const kurang = item.qty - maxQty;
 
-function processCashPayment() {
-    const paid = document.getElementById('cashPaid').value;
-    
-    const cartData = cart.map(item => ({
-    id: item.id,
-    qty: item.qty
-}));
+        return `
+            <div style="margin-bottom:10px; padding:10px; border:1px solid #fee2e2; background:#fff1f2; border-radius:8px;">
+                <div style="font-weight:700; color:#991b1b;">${item.name}</div>
+                <div style="font-size:13px; color:#7f1d1d; margin-top:4px;">
+                    Diminta: <b>${item.qty}</b> pcs<br>
+                    Stok tersedia: <b>${maxQty}</b> pcs <br>
+                </div>
+            </div>
+        `;
+    }).join('');
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = "{{ url('/kasir/checkout/tunai/process') }}";
-    
-    const csrfToken = document.querySelector('meta[name="csrf-token"]');
-    if (csrfToken) {
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = '_token';
-        csrfInput.value = csrfToken.content;
-        form.appendChild(csrfInput);
-    }
-    
-    const cartInput = document.createElement('input');
-    cartInput.type = 'hidden';
-    cartInput.name = 'cart';
-    cartInput.value = JSON.stringify(cartData);
-    form.appendChild(cartInput);
-    
-    const bayarInput = document.createElement('input');
-    bayarInput.type = 'hidden';
-    bayarInput.name = 'bayar';
-    bayarInput.value = paid;
-    form.appendChild(bayarInput);
-    
-    document.body.appendChild(form);
-    form.submit();
-}
-
-function showOnlinePayment() {
-    if (cart.length === 0) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Error!',
-            text: 'Keranjang kosong!',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#ef4444'
-        });
-        return;
-    }
-    
-    useDiscount = true;
-    renderCart();
-    
-    let totalSebelum = 0;
-    let totalDiskon = 0;
-    
-    cart.forEach(item => {
-        const subtotalSebelum = item.price * item.qty;
-        const diskonNominal = Math.floor((item.diskon / 100) * subtotalSebelum);
-        totalSebelum += subtotalSebelum;
-        totalDiskon += diskonNominal;
+    Swal.fire({
+        icon: 'error',
+        title: 'Stok Tidak Cukup!',
+        html: `
+            <div style="text-align:left; font-size:14px;">
+                Barang berikut stok nya kurang:
+                <div style="margin-top:12px;">${listBarang}</div>
+            </div>
+        `,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#ef4444'
     });
-    
-    const grandTotal = totalSebelum - totalDiskon;
-    
-    document.getElementById('onlineTotal').textContent = formatRupiah(grandTotal);
-    document.getElementById('onlineDiskon').textContent = `Hemat ${formatRupiah(totalDiskon)} dari diskon`;
-    document.getElementById('rfidInput').value = '';
-    document.getElementById('onlineProcessing').classList.add('hidden');
-    
-    document.getElementById('onlineModal').classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    
-    isProcessingPayment = false;
-    
-    setTimeout(() => {
-        document.getElementById('rfidInput').focus();
-    }, 100);
+    return;
 }
 
+
+useDiscount = false;
+scheduleRender(); 
+
+let total = 0;
+cart.forEach(item => {
+    const baseQty = Math.min(item.qty, item.stok);
+    const subtotalBase = baseQty * item.price;
+
+    let subtotalWaiting = 0;
+    if (waitingUsage[item.id] && waitingUsage[item.id].perWaiting) {
+        for (const wid in waitingUsage[item.id].perWaiting) {
+            const qty = waitingUsage[item.id].perWaiting[wid];
+            const w = waitingBarangData.find(x => x.id == wid);
+            if (w) {
+                subtotalWaiting += qty * w.harga_jual;
+            }
+        }
+    }
+
+    total += subtotalBase + subtotalWaiting;
+});
+
+document.getElementById('cashTotal').value = formatRupiah(total);
+document.getElementById('cashTotal').dataset.total = total;
+document.getElementById('cashPaid').value = '';
+document.getElementById('cashChange').value = '';
+document.getElementById('btnProcessCash').disabled = true;
+document.getElementById('btnProcessCash').className = 'w-full py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition';
+
+document.getElementById('cashModal').classList.remove('hidden');
+document.body.style.overflow = 'hidden';
+
+setTimeout(() => document.getElementById('cashPaid').focus(), 100);
+}
+function closeCashModal() {
+document.getElementById('cashModal').classList.add('hidden');
+document.body.style.overflow = 'auto';
+}
+document.getElementById('cashPaid').addEventListener('input', function() {
+let raw = this.value.replace(/[^0-9]/g, "");
+this.value = formatRupiah(raw);
+let total = parseInt(document.getElementById('cashTotal').dataset.total);
+let paid = parseInt(raw);
+let btn = document.getElementById('btnProcessCash');
+
+if (paid >= total) {
+    document.getElementById('cashChange').value = formatRupiah(paid - total);
+    btn.disabled = false;
+    btn.className = 'w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded font-semibold transition';
+} else {
+    document.getElementById('cashChange').value = 'Belum cukup';
+    btn.disabled = true;
+    btn.className = 'w-full py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition';
+}
+});
+document.getElementById('btnProcessCash').addEventListener('click', processCashPayment);
+function processCashPayment() {
+const paid = document.getElementById('cashPaid').value;
+const cartData = cart.map(item => {
+    const usage = waitingUsage[item.id] || { total: 0, perWaiting: {} };
+    return {
+        id: item.id,
+        qty: item.qty,
+        waitingUsage: usage.perWaiting
+    };
+});
+
+const form = document.createElement('form');
+form.method = 'POST';
+form.action = "{{ url('/kasir/checkout/tunai/process') }}";
+
+const csrfToken = document.querySelector('meta[name="csrf-token"]');
+if (csrfToken) {
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = '_token';
+    csrfInput.value = csrfToken.content;
+    form.appendChild(csrfInput);
+}
+
+const cartInput = document.createElement('input');
+cartInput.type = 'hidden';
+cartInput.name = 'cart';
+cartInput.value = JSON.stringify(cartData);
+form.appendChild(cartInput);
+
+const bayarInput = document.createElement('input');
+bayarInput.type = 'hidden';
+bayarInput.name = 'bayar';
+bayarInput.value = paid;
+form.appendChild(bayarInput);
+
+document.body.appendChild(form);
+form.submit();
+}
+function showOnlinePayment() {
+if (cart.length === 0) {
+Swal.fire({
+icon: 'error',
+title: 'Error!',
+text: 'Keranjang kosong!',
+confirmButtonText: 'OK',
+confirmButtonColor: '#ef4444'
+});
+return;
+}
+useDiscount = true;
+renderCart();
+
+let totalSebelum = 0;
+let totalDiskon = 0;
+
+cart.forEach(item => {
+    const baseQty = Math.min(item.qty, item.stok);
+    const baseSubtotal = baseQty * item.price;
+
+    let waitingSubtotal = 0;
+    if (waitingUsage[item.id] && waitingUsage[item.id].perWaiting) {
+        for (const wid in waitingUsage[item.id].perWaiting) {
+            const qty = waitingUsage[item.id].perWaiting[wid];
+            const w = waitingBarangData.find(x => x.id == wid);
+            if (w) {
+                waitingSubtotal += qty * w.harga_jual;
+            }
+        }
+    }
+
+    const subtotalSebelum = baseSubtotal + waitingSubtotal;
+    const diskonNominal = Math.floor((item.diskon / 100) * subtotalSebelum);
+
+    totalSebelum += subtotalSebelum;
+    totalDiskon += diskonNominal;
+});
+
+const grandTotal = totalSebelum - totalDiskon;
+
+document.getElementById('onlineTotal').textContent = formatRupiah(grandTotal);
+const onlineDiskon = document.getElementById('onlineDiskon');
+
+if (totalDiskon > 0) {
+    onlineDiskon.textContent = `Hemat ${formatRupiah(totalDiskon)}`;
+    onlineDiskon.classList.remove('hidden');
+} else {
+    onlineDiskon.textContent = '';
+    onlineDiskon.classList.add('hidden');
+}
+
+document.getElementById('rfidInput').value = '';
+document.getElementById('onlineProcessing').classList.add('hidden');
+
+document.getElementById('onlineModal').classList.remove('hidden');
+document.body.style.overflow = 'hidden';
+
+isProcessingPayment = false;
+
+setTimeout(() => {
+    document.getElementById('rfidInput').focus();
+}, 100);
+}
 function closeOnlineModal() {
     document.getElementById('onlineModal').classList.add('hidden');
     document.body.style.overflow = 'auto';
     isProcessingPayment = false;
-}
+
+    useDiscount = false;
+    renderCart();
+  }
 
 document.getElementById('rfidInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter' && !isProcessingPayment) {
-        const rfid = e.target.value.trim();
-        if (rfid) {
-            processOnlinePayment(rfid);
+if (e.key === 'Enter' && !isProcessingPayment) {
+const rfid = e.target.value.trim();
+if (rfid) {
+processOnlinePayment(rfid);
+}
+e.target.value = '';
+}
+});
+function processOnlinePayment(rfid) {
+if (isProcessingPayment) return;
+isProcessingPayment = true;
+document.getElementById('onlineProcessing').classList.remove('hidden');
+
+let totalSebelumDiskon = 0;
+let totalDiskon = 0;
+
+const cartData = cart.map(item => {
+    const baseQty = Math.min(item.qty, item.stok);
+    const baseSubtotal = baseQty * item.price;
+
+    let waitingSubtotal = 0;
+    if (waitingUsage[item.id] && waitingUsage[item.id].perWaiting) {
+        for (const wid in waitingUsage[item.id].perWaiting) {
+            const qty = waitingUsage[item.id].perWaiting[wid];
+            const w = waitingBarangData.find(x => x.id == wid);
+            if (w) {
+                waitingSubtotal += qty * w.harga_jual;
+            }
         }
-        e.target.value = '';
     }
+
+    const subtotalSebelum = baseSubtotal + waitingSubtotal;
+    const diskonNominal = Math.floor((item.diskon / 100) * subtotalSebelum);
+    const subtotal = subtotalSebelum - diskonNominal;
+    
+    totalSebelumDiskon += subtotalSebelum;
+    totalDiskon += diskonNominal;
+
+    const usage = waitingUsage[item.id] || { total: 0, perWaiting: {} };
+    
+    return {
+        id: item.id,
+        kode_barang: item.kode_barang,
+        name: item.name,
+        qty: item.qty,
+        harga: item.price,
+        stok: item.stok,
+        diskon: item.diskon,
+        diskon_nominal: diskonNominal,
+        subtotal: subtotal,
+        price: item.price,
+        waitingUsage: usage.perWaiting
+    };
 });
 
-function processOnlinePayment(rfid) {
-    if (isProcessingPayment) return;
-    
-    isProcessingPayment = true;
-    document.getElementById('onlineProcessing').classList.remove('hidden');
-    
-    let totalSebelumDiskon = 0;
-    let totalDiskon = 0;
-    
-    const cartData = cart.map(item => {
-        const subtotalSebelum = item.price * item.qty;
-        const diskonNominal = Math.floor((item.diskon / 100) * subtotalSebelum);
-        const subtotal = subtotalSebelum - diskonNominal;
-        
-        totalSebelumDiskon += subtotalSebelum;
-        totalDiskon += diskonNominal;
-        
-        return {
-            id: item.id,
-            kode_barang: item.kode_barang,
-            name: item.name,
-            qty: item.qty,
-            harga: item.price,
-            stok: item.stok,
-            diskon: item.diskon,
-            diskon_nominal: diskonNominal,
-            subtotal: subtotal,
-            price: item.price
-        };
-    });
-    
-    const grandTotal = totalSebelumDiskon - totalDiskon;
-    
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = "{{ url('/kasir/checkout/online/process') }}";
-    
-    const csrfToken = document.querySelector('meta[name="csrf-token"]');
-    if (csrfToken) {
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = '_token';
-        csrfInput.value = csrfToken.content;
-        form.appendChild(csrfInput);
-    }
-    
-    const itemsInput = document.createElement('input');
-    itemsInput.type = 'hidden';
-    itemsInput.name = 'items';
-    itemsInput.value = JSON.stringify(cartData);
-    form.appendChild(itemsInput);
-    
-    const totalInput = document.createElement('input');
-    totalInput.type = 'hidden';
-    totalInput.name = 'total';
-    totalInput.value = totalSebelumDiskon;
-    form.appendChild(totalInput);
-    
-    const diskonInput = document.createElement('input');
-    diskonInput.type = 'hidden';
-    diskonInput.name = 'diskon_nominal';
-    diskonInput.value = totalDiskon;
-    form.appendChild(diskonInput);
-    
-    const grandTotalInput = document.createElement('input');
-    grandTotalInput.type = 'hidden';
-    grandTotalInput.name = 'grand_total';
-    grandTotalInput.value = grandTotal;
-    form.appendChild(grandTotalInput);
-    
-    const noCustInput = document.createElement('input');
-    noCustInput.type = 'hidden';
-    noCustInput.name = 'pid';
-    noCustInput.value = rfid;
-    form.appendChild(noCustInput);
-    
-    const cartDataInput = document.createElement('input');
-    cartDataInput.type = 'hidden';
-    cartDataInput.name = 'cart_data';
-    cartDataInput.value = JSON.stringify(cartData);
-    form.appendChild(cartDataInput);
-    
-    document.body.appendChild(form);
-    form.submit();
+const grandTotal = totalSebelumDiskon - totalDiskon;
+
+const form = document.createElement('form');
+form.method = 'POST';
+form.action = "{{ url('/kasir/checkout/online/process') }}";
+
+const csrfToken = document.querySelector('meta[name="csrf-token"]');
+if (csrfToken) {
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = '_token';
+    csrfInput.value = csrfToken.content;
+    form.appendChild(csrfInput);
 }
 
-function formatRupiah(num) {
-    if (isNaN(num) || num === '') return 'Rp 0';
-    return 'Rp ' + parseInt(num).toLocaleString('id-ID');
+const itemsInput = document.createElement('input');
+itemsInput.type = 'hidden';
+itemsInput.name = 'items';
+itemsInput.value = JSON.stringify(cartData);
+form.appendChild(itemsInput);
+
+const totalInput = document.createElement('input');
+totalInput.type = 'hidden';
+totalInput.name = 'total';
+totalInput.value = totalSebelumDiskon;
+form.appendChild(totalInput);
+
+const diskonInput = document.createElement('input');
+diskonInput.type = 'hidden';
+diskonInput.name = 'diskon_nominal';
+diskonInput.value = totalDiskon;
+form.appendChild(diskonInput);
+
+const grandTotalInput = document.createElement('input');
+grandTotalInput.type = 'hidden';
+grandTotalInput.name = 'grand_total';
+grandTotalInput.value = grandTotal;
+form.appendChild(grandTotalInput);
+
+const noCustInput = document.createElement('input');
+noCustInput.type = 'hidden';
+noCustInput.name = 'pid';
+noCustInput.value = rfid;
+form.appendChild(noCustInput);
+
+const cartDataInput = document.createElement('input');
+cartDataInput.type = 'hidden';
+cartDataInput.name = 'cart_data';
+cartDataInput.value = JSON.stringify(cartData);
+form.appendChild(cartDataInput);
+
+document.body.appendChild(form);
+form.submit();
 }
+function formatRupiah(num) {
+if (isNaN(num) || num === '') return 'Rp 0';
+return 'Rp ' + parseInt(num).toLocaleString('id-ID');
+}
+console.log('Waiting Barang Data:', waitingBarangData);
+console.log('Waiting Barang Filtered:', waitingBarang);
 </script>
 </body>
 </html>

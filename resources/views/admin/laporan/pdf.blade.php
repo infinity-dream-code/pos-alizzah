@@ -4,105 +4,111 @@
     <meta charset="UTF-8">
     <title>Laporan Transaksi</title>
     <style>
-        body { font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 20px; }
-        h2 { text-align: center; margin-bottom: 8px; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; }
-        .subtitle { text-align: center; margin-bottom: 5px; font-size: 10px; color: #666; }
-        .filter-info { text-align: center; margin-bottom: 20px; font-size: 10px; color: #444; padding: 8px; background: #f5f5f5; border-radius: 4px; }
-        .filter-info strong { font-weight: 600; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        table, th, td { border: 1px solid #333; }
-        th { background: #e8e8e8; padding: 10px 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-        td { padding: 8px; font-size: 10px; }
-        .right { text-align: right; }
-        .center { text-align: center; }
-        .summary { margin-top: 25px; width: 40%; float: right; }
-        .summary td { padding: 8px 10px; font-size: 11px; }
-        .summary td:first-child { font-weight: 600; width: 60%; }
-        .summary td:last-child { text-align: right; width: 40%; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color:#333; margin:20px; }
+        h2 { text-align:center; margin-bottom:4px; font-size:18px; text-transform:uppercase; }
+        .subtitle { text-align:center; font-size:10px; color:#666; margin-bottom:10px; }
+        .filter-info { text-align:center; background:#f1f1f1; border-radius:4px; padding:10px; font-size:10px; margin-bottom:20px; }
+        table { width: 100%; border-collapse: collapse; margin-top:10px; }
+        table, th, td { border:1px solid #333; }
+        th { background:#e8e8e8; padding:8px; text-transform:uppercase; font-size:10px; }
+        td { padding:7px; font-size:10px; }
+        .right { text-align:right; }
+        .center { text-align:center; }
+        .summary { width:40%; float:right; margin-top:20px; }
+        .summary td { padding:8px 10px; font-size:11px; }
+        .summary td:first-child { font-weight:600; }
+        .top3 { margin-top:40px; width:50%; }
+        .top3 th { background:#dcdcdc; }
     </style>
 </head>
 
 <body>
 
-    <h2>Laporan Transaksi</h2>
+<h2>Laporan Transaksi</h2>
+<div class="subtitle">Dicetak pada: {{ \Carbon\Carbon::now('Asia/Jakarta')->format('d M Y H:i') }}</div>
 
-    <div class="subtitle">
-        Dicetak pada: {{ \Carbon\Carbon::now('Asia/Jakarta')->format('d M Y H:i') }}
-    </div>
+@if(request()->filled('tanggal_dari') || request()->filled('tanggal_sampai') || request()->filled('metode') || request()->filled('diskon_min') || request()->filled('diskon_max'))
+<div class="filter-info">
+    <strong>Filter: </strong>
 
-    @if(request('tanggal_dari') || request('tanggal_sampai') || request('metode'))
-        <div class="filter-info">
-            <strong>Filter:</strong>
-            @if(request('tanggal_dari') && request('tanggal_sampai'))
-                Periode: {{ \Carbon\Carbon::parse(request('tanggal_dari'))->format('d M Y') }} - {{ \Carbon\Carbon::parse(request('tanggal_sampai'))->format('d M Y') }}
-            @elseif(request('tanggal_dari'))
-                Dari: {{ \Carbon\Carbon::parse(request('tanggal_dari'))->format('d M Y') }}
-            @elseif(request('tanggal_sampai'))
-                Sampai: {{ \Carbon\Carbon::parse(request('tanggal_sampai'))->format('d M Y') }}
-            @endif
-
-            @if(request('metode'))
-                @if(request('tanggal_dari') || request('tanggal_sampai')) |
-                @endif
-                Metode: {{ ucfirst(request('metode')) }}
-            @endif
-        </div>
+    @if(request('tanggal_dari') && request('tanggal_sampai'))
+        Periode: {{ \Carbon\Carbon::parse(request('tanggal_dari'))->format('d M Y') }} - {{ \Carbon\Carbon::parse(request('tanggal_sampai'))->format('d M Y') }}
+    @elseif(request('tanggal_dari'))
+        Dari: {{ \Carbon\Carbon::parse(request('tanggal_dari'))->format('d M Y') }}
+    @elseif(request('tanggal_sampai'))
+        Sampai: {{ \Carbon\Carbon::parse(request('tanggal_sampai'))->format('d M Y') }}
     @endif
 
-    @php
-        $no = 1;
-        $totalPendapatan = 0;
-        $totalKeuntungan = 0;
-    @endphp
+    @if(request('metode'))
+        | Metode: {{ ucfirst(request('metode')) }}
+    @endif
 
-    <table>
-        <thead>
-            <tr>
-                <th class="center" style="width: 5%;">No</th>
-                <th style="width: 18%;">Kode Transaksi</th>
-                <th style="width: 17%;">Tanggal</th>
-                <th style="width: 15%;">Kasir</th>
-                <th class="right" style="width: 15%;">Total</th>
-                <th class="right" style="width: 15%;">Keuntungan</th>
-                <th class="center" style="width: 15%;">Metode</th>
-            </tr>
-        </thead>
+    @if(request('diskon_min') || request('diskon_max'))
+        | Diskon:
+        @if(request('diskon_min') && request('diskon_max'))
+            {{ request('diskon_min') }}% - {{ request('diskon_max') }}%
+        @elseif(request('diskon_min'))
+            ≥ {{ request('diskon_min') }}%
+        @else
+            ≤ {{ request('diskon_max') }}%
+        @endif
+    @endif
+</div>
+@endif
 
-        <tbody>
-            @foreach ($transaksis as $t)
-                @php
-                    $totalPendapatan += $t->grand_total;
-                    $profitTransaksi = $t->profit ?? 0;
-                    $totalKeuntungan += $profitTransaksi;
-                @endphp
+@php
+    $no = 1;
+    $totalPendapatan = 0;
+    $totalKeuntungan = 0;
+    $totalDiskon = 0;
+@endphp
 
-                <tr>
-                    <td class="center">{{ $no++ }}</td>
-                    <td>{{ $t->kode_transaksi }}</td>
-                    <td>{{ \Carbon\Carbon::parse($t->tanggal)->format('d M Y') }}</td>
-                    <td>{{ $t->user->nama ?? '-' }}</td>
-                    <td class="right">Rp {{ number_format($t->grand_total, 0, ',', '.') }}</td>
-                    <td class="right">Rp {{ number_format($profitTransaksi, 0, ',', '.') }}</td>
-                    <td class="center">{{ ucfirst($t->metode) }}</td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
+<table>
+<thead>
+<tr>
+    <th class="center" style="width:5%">No</th>
+    <th style="width:15%">Kode Transaksi</th>
+    <th style="width:15%">Tanggal</th>
+    <th style="width:13%">Kasir</th>
+    <th class="right" style="width:15%">Total</th>
+    <th class="right" style="width:15%">Keuntungan</th>
+    <th class="right" style="width:12%">Diskon</th>
+    <th class="center" style="width:10%">Metode</th>
+</tr>
+</thead>
 
-    <table class="summary">
-        <tr>
-            <td>Total Transaksi</td>
-            <td>{{ count($transaksis) }}</td>
-        </tr>
-        <tr>
-            <td>Total Pendapatan</td>
-            <td>Rp {{ number_format($totalPendapatan, 0, ',', '.') }}</td>
-        </tr>
-        <tr>
-            <td>Total Keuntungan</td>
-            <td>Rp {{ number_format($totalKeuntungan, 0, ',', '.') }}</td>
-        </tr>
-    </table>
+<tbody>
+@foreach($transaksis as $t)
+@php
+    $diskonTransaksi = $t->detail->sum('diskon_nominal');
+    $totalDiskon += $diskonTransaksi;
+    $totalPendapatan += $t->grand_total;
+    $profit = $t->profit ?? 0;
+    $totalKeuntungan += $profit;
+@endphp
+<tr>
+    <td class="center">{{ $no++ }}</td>
+    <td>{{ $t->kode_transaksi }}</td>
+    <td>{{ \Carbon\Carbon::parse($t->tanggal)->format('d M Y') }}</td>
+    <td>{{ $t->user->nama ?? '-' }}</td>
+    <td class="right">Rp {{ number_format($t->grand_total,0,',','.') }}</td>
+    <td class="right">Rp {{ number_format($profit,0,',','.') }}</td>
+    <td class="right">Rp {{ number_format($diskonTransaksi,0,',','.') }}</td>
+    <td class="center">{{ ucfirst($t->metode) }}</td>
+</tr>
+@endforeach
+</tbody>
+</table>
+
+<table class="summary">
+<tr><td>Total Transaksi</td><td>{{ count($transaksis) }}</td></tr>
+<tr><td>Total Pendapatan</td><td>Rp {{ number_format($totalPendapatan,0,',','.') }}</td></tr>
+<tr><td>Total Keuntungan</td><td>Rp {{ number_format($totalKeuntungan,0,',','.') }}</td></tr>
+<tr><td>Total Diskon</td><td>Rp {{ number_format($totalDiskon,0,',','.') }}</td></tr>
+</table>
+
+</tbody>
+</table>
 
 </body>
 </html>
