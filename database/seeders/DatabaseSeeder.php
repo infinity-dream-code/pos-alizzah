@@ -3,16 +3,17 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Barang;
-use App\Models\Stok;
-use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+use App\Models\Barang;
+use App\Models\WaitingBarang;
+use App\Models\Diskon;
 
 class DatabaseSeeder extends Seeder
 {
-    public function run(): void
+    public function run()
     {
-        $admin = User::create([
+        User::create([
             'nama' => 'Administrator',
             'username' => 'admin',
             'password' => Hash::make('admin123'),
@@ -27,67 +28,49 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $year = date('Y');
+        $barangIds = [];
 
-        $barangList = [
-            [
-                'nama_barang' => 'Roti',
-                'deskripsi' => 'Roti kantin',
-                'harga_beli' => 3000,
-                'harga_jual' => 5000,
-                'stok' => 50
-            ],
-            [
-                'nama_barang' => 'Burger',
-                'deskripsi' => 'Burger kantin',
-                'harga_beli' => 8000,
-                'harga_jual' => 12000,
-                'stok' => 30
-            ],
-            [
-                'nama_barang' => 'Es Teh',
-                'deskripsi' => 'Es teh manis segar',
-                'harga_beli' => 2000,
-                'harga_jual' => 4000,
-                'stok' => 100
-            ],
-            [
-                'nama_barang' => 'Air Mineral',
-                'deskripsi' => 'Air mineral botol',
-                'harga_beli' => 2000,
-                'harga_jual' => 3500,
-                'stok' => 120
-            ],
-            [
-                'nama_barang' => 'Kopi',
-                'deskripsi' => 'Kopi panas kantin',
-                'harga_beli' => 2000,
-                'harga_jual' => 5000,
-                'stok' => 80
-            ]
-        ];
-
-        $counter = 1;
-
-        foreach ($barangList as $b) {
-            $kode = $year . str_pad($counter, 4, '0', STR_PAD_LEFT);
+        for ($i = 1; $i <= 500; $i++) {
+            $kode = $year . str_pad($i, 4, '0', STR_PAD_LEFT);
+            $harga_beli = rand(2, 20) * 1000;
+            $harga_jual = $harga_beli + rand(1, 10) * 500;
 
             $barang = Barang::create([
                 'kode_barang' => $kode,
-                'nama_barang' => $b['nama_barang'],
-                'deskripsi' => $b['deskripsi'],
-                'harga_beli' => $b['harga_beli'],
-                'harga_jual' => $b['harga_jual'],
-                'stok' => $b['stok'],
+                'nama_barang' => 'Barang ' . $i,
+                'deskripsi' => 'Deskripsi barang ' . $i,
+                'harga_beli' => $harga_beli,
+                'harga_jual' => $harga_jual,
+                'stok' => rand(5, 50),
                 'status' => 'aktif'
             ]);
 
-            Stok::create([
-                'id_barang' => $barang->id,
-                'id_user' => $admin->id,
-                'stok' => $b['stok']
-            ]);
+            $barangIds[] = $barang->id;
+        }
 
-            $counter++;
+        $randomBarangWaiting = array_slice($barangIds, 0, 100);
+
+        foreach ($randomBarangWaiting as $id) {
+            $harga_beli = rand(2, 20) * 1000;
+            $harga_jual = $harga_beli + rand(1, 10) * 500;
+
+            WaitingBarang::create([
+                'barang_id' => $id,
+                'kode_barang' => $year . str_pad($id, 4, '0', STR_PAD_LEFT),
+                'stok' => rand(1, 20),
+                'harga_beli' => $harga_beli,
+                'harga_jual' => $harga_jual
+            ]);
+        }
+
+        $randomBarangDiskon = array_slice($barangIds, 0, 300);
+
+        foreach ($randomBarangDiskon as $id) {
+            Diskon::create([
+                'barang_id' => $id,
+                'nilai' => rand(5, 30),
+                'aktif' => true
+            ]);
         }
     }
 }
