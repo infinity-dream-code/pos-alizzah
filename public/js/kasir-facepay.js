@@ -10,11 +10,13 @@
   var MATCH_THRESHOLD = 0.38;
   var MIN_MATCH_MARGIN = 0.1;
   var STABLE_HITS = 2;
-  var MIN_FACE_HEIGHT_RATIO = 0.09;
-  var LIVE_MIN_CONFIDENCE = 0.42;
+  /** Webcam desktop sering wajah kecil di frame — 0.05 lebih longgar dari modul kantin (0.09) */
+  var MIN_FACE_HEIGHT_RATIO = 0.05;
+  var LIVE_MIN_CONFIDENCE = 0.35;
   var REF_MIN_CONFIDENCE = 0.35;
   var DETECT_MS = 350;
   var KET_MAX = 60;
+  var lastHintAt = 0;
 
   var cfg = null;
   var stream = null;
@@ -399,6 +401,13 @@
       });
   }
 
+  function hintStatus(html, kind) {
+    var now = Date.now();
+    if (now - lastHintAt < 400) return;
+    lastHintAt = now;
+    setStatus(html, kind || "");
+  }
+
   function tickDetect() {
     if (!stream || busyDetect || !modelsReady || !refs.length || confirmOpen) {
       return;
@@ -411,25 +420,65 @@
         if (!det || !det.detection) {
           resetPendingMatch();
           showMatchOverlay("");
+          hintStatus(
+            "<strong>Mencari wajah…</strong> Hadapkan & dekatkan wajah ke kamera.",
+            ""
+          );
           return;
         }
+        var ratio = det.detection.box.height / (vid.videoHeight || 1);
         if (!faceLargeEnough(det.detection.box, vid)) {
           resetPendingMatch();
           showMatchOverlay("");
+          hintStatus(
+            "<strong>Wajah terlalu kecil</strong> (" +
+              Math.round(ratio * 100) +
+              "%). Dekatkan wajah ke kamera.",
+            "warn"
+          );
           return;
         }
         var m = bestMatch(det.descriptor);
-        if (!m || !m.accepted || !m.ref || !m.ref.siswa) {
+        if (!m || !m.ref || !m.ref.siswa) {
           resetPendingMatch();
           showMatchOverlay("");
+          hintStatus(
+            "<strong>Wajah terdeteksi</strong>, belum cocok dengan referensi.",
+            "warn"
+          );
+          return;
+        }
+        var skor = m.distance.toFixed(2);
+        if (!m.accepted) {
+          resetPendingMatch();
+          showMatchOverlay("");
+          hintStatus(
+            "<strong>Belum cocok</strong> — skor " +
+              skor +
+              " (perlu ≤ " +
+              MATCH_THRESHOLD.toFixed(2) +
+              "). Dekatkan & hadapkan lurus.",
+            "warn"
+          );
           return;
         }
         showMatchOverlay(m.ref.siswa.nama || "");
-        if (confirmStableMatch(m.ref.siswa.id)) {
+        var stable = confirmStableMatch(m.ref.siswa.id);
+        hintStatus(
+          "<strong>Kandidat:</strong> " +
+            (m.ref.siswa.nama || "") +
+            " · skor " +
+            skor +
+            (stable ? " · mengunci…" : " · tahan sebentar…"),
+          "ok"
+        );
+        if (stable) {
           onStableMatch(m.ref.siswa);
         }
       })
-      .catch(function () {})
+      .catch(function () {
+        hintStatus("<strong>Deteksi error.</strong> Coba hadapkan ulang.", "warn");
+      })
       .then(function () {
         busyDetect = false;
       });
@@ -453,7 +502,9 @@
       })
       .then(function () {
         setStatus(
-          "<strong>Kamera aktif (ambang 0.38).</strong> Hadapkan wajah siswa.",
+          "<strong>Kamera aktif</strong> (" +
+            refs.length +
+            " ref, ambang 0.38). Dekatkan wajah sampai memenuhi frame.",
           "ok"
         );
         detectTimer = setInterval(tickDetect, DETECT_MS);
