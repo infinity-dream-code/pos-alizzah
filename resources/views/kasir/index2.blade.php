@@ -1638,7 +1638,7 @@ function inquirySaldoThenPin(rfid) {
                 document.getElementById('rfidStep').classList.remove('hidden');
                 document.getElementById('saldoStep').classList.add('hidden');
                 document.getElementById('rfidInput').focus();
-            }, 2200);
+            }, 3500);
             return;
         }
 
@@ -1652,7 +1652,7 @@ function inquirySaldoThenPin(rfid) {
                 document.getElementById('rfidStep').classList.remove('hidden');
                 document.getElementById('saldoStep').classList.add('hidden');
                 document.getElementById('rfidInput').focus();
-            }, 2500);
+            }, 3500);
             return;
         }
 
@@ -1681,7 +1681,7 @@ function inquirySaldoThenPin(rfid) {
             document.getElementById('rfidStep').classList.remove('hidden');
             document.getElementById('saldoStep').classList.add('hidden');
             document.getElementById('rfidInput').focus();
-        }, 2200);
+        }, 3500);
     });
 }
 
