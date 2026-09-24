@@ -482,24 +482,44 @@ document.addEventListener('DOMContentLoaded', function() {
             <p id="onlineDiskon" class="text-xs text-red-600 mt-1 font-semibold"></p>
         </div>
 
-        <div class="mb-4 text-center">
+        <div id="rfidStep" class="mb-4 text-center">
             <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-blue-100 to-blue-50 rounded-lg border-2 border-blue-300">
                 <svg class="w-16 h-16 text-blue-600 mb-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                 </svg>
                 <p class="text-lg font-bold text-gray-800 mb-1">Tap Kartu RFID</p>
-                <p class="text-sm text-gray-600">Tempelkan kartu pada reader</p>
+                <p class="text-sm text-gray-600 mb-4">Tempelkan kartu pada reader</p>
+                <div class="w-full max-w-sm text-left">
+                    <label for="rfidInput" class="block text-xs font-semibold text-gray-500 mb-1">Atau ketik nomor kartu (mode coba)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="rfidInput" autocomplete="off" autofocus
+                            class="flex-1 px-3 py-2 border-2 border-blue-300 rounded text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder="UID / nomor kartu">
+                        <button type="button" id="rfidSubmitBtn"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded shrink-0">
+                            Cek
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="saldoStep" class="hidden mb-4">
+            <div id="saldoCard" class="p-4 rounded-lg border-2 bg-green-50 border-green-300">
+                <p class="text-sm text-gray-600 mb-1">Pemegang Kartu</p>
+                <p id="saldoNama" class="text-lg font-bold text-gray-800 mb-2">—</p>
+                <p class="text-sm text-gray-600 mb-1">Saldo</p>
+                <p id="saldoNilai" class="text-2xl font-bold text-gray-800">—</p>
+                <p id="saldoStatus" class="text-sm font-semibold mt-2"></p>
             </div>
         </div>
 
         <div id="onlineProcessing" class="hidden">
             <div class="flex flex-col items-center justify-center p-6">
                 <div class="spinner mb-3"></div>
-                <p class="text-sm text-gray-600">Memproses pembayaran...</p>
+                <p id="onlineProcessingText" class="text-sm text-gray-600">Memproses pembayaran...</p>
             </div>
         </div>
-
-        <input type="text" id="rfidInput" class="opacity-0 absolute -z-10" autofocus>
     </div>
 </div>
 
@@ -1600,6 +1620,9 @@ if (totalDiskon > 0) {
 
 document.getElementById('rfidInput').value = '';
 document.getElementById('onlineProcessing').classList.add('hidden');
+document.getElementById('rfidStep').classList.remove('hidden');
+document.getElementById('saldoStep').classList.add('hidden');
+window._onlineGrandTotal = grandTotal;
 
 document.getElementById('onlineModal').classList.remove('hidden');
 document.body.style.overflow = 'hidden';
@@ -1614,6 +1637,9 @@ function closeOnlineModal() {
     document.getElementById('onlineModal').classList.add('hidden');
     document.body.style.overflow = 'auto';
     isProcessingPayment = false;
+    document.getElementById('rfidStep').classList.remove('hidden');
+    document.getElementById('saldoStep').classList.add('hidden');
+    document.getElementById('onlineProcessing').classList.add('hidden');
 
     useDiscount = false;
     renderCart();
@@ -1623,15 +1649,124 @@ document.getElementById('rfidInput').addEventListener('keypress', function(e) {
 if (e.key === 'Enter' && !isProcessingPayment) {
 const rfid = e.target.value.trim();
 if (rfid) {
-processOnlinePayment(rfid);
+inquiryThenPay(rfid);
 }
 e.target.value = '';
 }
 });
+
+function submitRfidFromInput() {
+    if (isProcessingPayment) return;
+    const inp = document.getElementById('rfidInput');
+    const rfid = inp ? inp.value.trim() : '';
+    if (!rfid) {
+        if (inp) inp.focus();
+        return;
+    }
+    inquiryThenPay(rfid);
+    if (inp) inp.value = '';
+}
+
+const rfidSubmitBtn = document.getElementById('rfidSubmitBtn');
+if (rfidSubmitBtn) {
+    rfidSubmitBtn.addEventListener('click', submitRfidFromInput);
+}
+
+function getCsrfToken() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? el.content : '';
+}
+
+function inquiryThenPay(rfid) {
+    if (isProcessingPayment) return;
+    isProcessingPayment = true;
+    document.getElementById('rfidStep').classList.add('hidden');
+    document.getElementById('saldoStep').classList.add('hidden');
+    document.getElementById('onlineProcessing').classList.remove('hidden');
+    document.getElementById('onlineProcessingText').textContent = 'Mengecek saldo...';
+
+    const total = Number(window._onlineGrandTotal) || 0;
+
+    fetch("{{ url('/kasir/inquiry-saldo') }}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ pid: rfid })
+    })
+    .then(function(res) {
+        return res.json().then(function(body) {
+            return { okHttp: res.ok, body: body };
+        });
+    })
+    .then(function(r) {
+        document.getElementById('onlineProcessing').classList.add('hidden');
+        document.getElementById('saldoStep').classList.remove('hidden');
+
+        const body = r.body || {};
+        const nama = body.nama || '—';
+        const saldo = Number(body.saldo) || 0;
+        const saldoCard = document.getElementById('saldoCard');
+        const saldoStatus = document.getElementById('saldoStatus');
+
+        document.getElementById('saldoNama').textContent = nama;
+        document.getElementById('saldoNilai').textContent = formatRupiah(saldo);
+
+        if (!r.okHttp || !body.ok) {
+            saldoCard.className = 'p-4 rounded-lg border-2 bg-red-50 border-red-300';
+            saldoStatus.className = 'text-sm font-semibold mt-2 text-red-700';
+            saldoStatus.textContent = body.error || 'Kartu tidak terdaftar';
+            isProcessingPayment = false;
+            setTimeout(function() {
+                document.getElementById('rfidStep').classList.remove('hidden');
+                document.getElementById('saldoStep').classList.add('hidden');
+                document.getElementById('rfidInput').focus();
+            }, 2200);
+            return;
+        }
+
+        if (saldo < total) {
+            saldoCard.className = 'p-4 rounded-lg border-2 bg-red-50 border-red-300';
+            saldoStatus.className = 'text-sm font-semibold mt-2 text-red-700';
+            saldoStatus.textContent = 'Saldo tidak mencukupi (total ' + formatRupiah(total) + ')';
+            isProcessingPayment = false;
+            setTimeout(function() {
+                document.getElementById('rfidStep').classList.remove('hidden');
+                document.getElementById('saldoStep').classList.add('hidden');
+                document.getElementById('rfidInput').focus();
+            }, 2500);
+            return;
+        }
+
+        saldoCard.className = 'p-4 rounded-lg border-2 bg-green-50 border-green-300';
+        saldoStatus.className = 'text-sm font-semibold mt-2 text-green-700';
+        saldoStatus.textContent = 'Saldo cukup. Memproses pembayaran...';
+        processOnlinePayment(rfid);
+    })
+    .catch(function(err) {
+        document.getElementById('onlineProcessing').classList.add('hidden');
+        document.getElementById('saldoStep').classList.remove('hidden');
+        document.getElementById('saldoCard').className = 'p-4 rounded-lg border-2 bg-red-50 border-red-300';
+        document.getElementById('saldoNama').textContent = '—';
+        document.getElementById('saldoNilai').textContent = '—';
+        document.getElementById('saldoStatus').className = 'text-sm font-semibold mt-2 text-red-700';
+        document.getElementById('saldoStatus').textContent = (err && err.message) || 'Gagal cek saldo';
+        isProcessingPayment = false;
+        setTimeout(function() {
+            document.getElementById('rfidStep').classList.remove('hidden');
+            document.getElementById('saldoStep').classList.add('hidden');
+            document.getElementById('rfidInput').focus();
+        }, 2200);
+    });
+}
+
 function processOnlinePayment(rfid) {
-if (isProcessingPayment) return;
-isProcessingPayment = true;
+if (isProcessingPayment === false) isProcessingPayment = true;
 document.getElementById('onlineProcessing').classList.remove('hidden');
+document.getElementById('onlineProcessingText').textContent = 'Memproses pembayaran...';
 
 let totalSebelumDiskon = 0;
 let totalDiskon = 0;

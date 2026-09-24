@@ -7,11 +7,10 @@ use App\Models\Transaksi;
 use App\Models\DetailTransaksi;
 use App\Models\Barang;
 use App\Models\WaitingBarang;
+use App\Services\BatuAlizzahClient;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
-use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 
 class Transaksi2Controller extends Controller
 {
@@ -82,6 +81,35 @@ class Transaksi2Controller extends Controller
         if (stripos($message, 'saldo') !== false) return "Saldo tidak mencukupi";
         if (stripos($message, 'pin salah') !== false) return "PIN yang Anda masukkan salah";
         return $message;
+    }
+
+    /** Inquiry saldo kartu RFID via Batu_Alizzah */
+    public function inquirySaldo(Request $request)
+    {
+        $noKartu = trim((string) $request->input('pid', $request->input('nokartu', '')));
+        if ($noKartu === '') {
+            return response()->json(['ok' => false, 'error' => 'Kartu RFID kosong'], 400);
+        }
+
+        try {
+            $result = BatuAlizzahClient::make()->inquirySaldo($noKartu);
+            if (!$result['ok']) {
+                return response()->json([
+                    'ok' => false,
+                    'error' => $result['error'] ?: 'Kartu tidak terdaftar',
+                    'nama' => $result['nama'],
+                    'saldo' => $result['saldo'],
+                ], 422);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'nama' => $result['nama'],
+                'saldo' => $result['saldo'],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 502);
+        }
     }
     public function processTunai(Request $request)
     {
@@ -476,48 +504,35 @@ class Transaksi2Controller extends Controller
 
             $grand_total = $total - $total_diskon;
 
-            $payload = [
-                "pid" => $pid,
-                "pin" => $pin,
-                "nominal" => $grand_total
-            ];
-
-            $secretKey = "53c2f9aariasb60akenoa3dc29b60c3e1gremorye3c1701f4355fa4";
-            $jwtToken = JWT::encode($payload, $secretKey, 'HS256');
-
-            $response = Http::timeout(30)->withHeaders([
-                'Content-Type' => 'application/json',
-            ])->post("http://10.99.23.111/WS_CLIENT/DEMO_POS/index.php", [
-                "method" => "debetCashWithPin",
-                "token" => $jwtToken
-            ]);
-
-            if (!$response->successful()) {
+            try {
+                $pay = BatuAlizzahClient::make()->paymentBelanja((string) $pid, (int) $grand_total, $pin ? (string) $pin : null);
+            } catch (\Throwable $e) {
                 DB::rollBack();
-                $res = $response->json();
                 $sessionData = $this->prepareCartSessionData($cart);
                 return redirect('/kasir2')
-                    ->with('error', $this->formatErrorMessage($res['message'] ?? 'Server pembayaran bermasalah'))
+                    ->with('error', $this->formatErrorMessage($e->getMessage()))
                     ->with('cart_data', $sessionData['cart'])
                     ->with('waiting_usage', $sessionData['waiting_usage'])
                     ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
                     ->with('use_discount', true);
             }
 
-            $res = $response->json();
-            if (!isset($res['status']) || $res['status'] != 200) {
+            if (!$pay['ok']) {
                 DB::rollBack();
                 $sessionData = $this->prepareCartSessionData($cart);
+                $errMsg = $pay['message'];
+                if ($pay['result'] === 'SALDO_TAK_MENCUKUPI' && $pay['saldo'] !== null) {
+                    $errMsg = 'Saldo tidak mencukupi. Sisa saldo: Rp ' . number_format((int) $pay['saldo'], 0, ',', '.');
+                }
                 return redirect('/kasir2')
-                    ->with('error', $this->formatErrorMessage($res['message'] ?? 'Pembayaran gagal'))
+                    ->with('error', $this->formatErrorMessage($errMsg))
                     ->with('cart_data', $sessionData['cart'])
                     ->with('waiting_usage', $sessionData['waiting_usage'])
                     ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
                     ->with('use_discount', true);
             }
 
-            $msg = explode('|', $res['message']);
-            $return_id = $msg[3] ?? null;
+            $return_id = null;
 
             $tanggal = Carbon::now('Asia/Jakarta');
             $kode = 'TRX-' . $tanggal->format('YmdHis');
@@ -555,7 +570,14 @@ class Transaksi2Controller extends Controller
             }
 
             DB::commit();
-            return redirect('/kasir2')->with('success', 'Pembayaran berhasil!');
+            $suksesMsg = 'Pembayaran berhasil!';
+            if (!empty($pay['nama'])) {
+                $suksesMsg .= ' ' . $pay['nama'];
+            }
+            if ($pay['saldo'] !== null) {
+                $suksesMsg .= ' · Sisa saldo: Rp ' . number_format((int) $pay['saldo'], 0, ',', '.');
+            }
+            return redirect('/kasir2')->with('success', $suksesMsg);
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect('/kasir2')->with('error', 'Kesalahan sistem: ' . $e->getMessage());

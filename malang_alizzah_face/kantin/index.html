@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1a15" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta name="description" content="FacePay kantin — Facepay Alizzah" />
+    <title>Kantin FacePay — Facepay Alizzah</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/kantin.css?v=pay-ket-1" />
+  </head>
+  <body class="kantin-app" data-app-root="..">
+    <header class="k-top">
+      <div class="k-top__brand">
+        <span class="k-top__mark" aria-hidden="true">FA</span>
+        <div>
+          <strong class="k-top__title">Alizzah Kantin</strong>
+          <span class="k-top__user" id="kantin-user-label">…</span>
+        </div>
+      </div>
+      <button type="button" class="btn btn--ghost" id="kantin-logout">Keluar</button>
+    </header>
+
+    <main class="k-main" id="kantin-root">
+      <div class="k-grid">
+        <section class="k-stage-col">
+          <div class="k-toolbar">
+            <div class="k-actions">
+              <button type="button" class="btn btn--brand" id="kantin-cam-start">Aktifkan kamera</button>
+              <button type="button" class="btn btn--ghost" id="kantin-cam-stop" hidden>Hentikan</button>
+              <button type="button" class="btn btn--ghost" id="kantin-cam-flip" hidden title="Tukar kamera depan / belakang">Ganti kamera</button>
+              <button type="button" class="btn btn--ghost" id="kantin-reload-faces" title="Hanya siswa baru atau foto yang berubah yang dihitung ulang">Muat ulang wajah</button>
+            </div>
+          </div>
+
+          <div id="kantin-status" class="k-status" role="status" aria-live="polite">Menyiapkan…</div>
+
+          <div class="k-stage" id="kantin-video-wrap">
+            <video id="kantin-video" class="k-stage__video" playsinline autoplay muted></video>
+            <div class="k-stage__overlay" aria-hidden="true">
+              <div id="kantin-target-box" class="k-target" hidden>
+                <span id="kantin-target-label" class="k-target__label" hidden></span>
+              </div>
+            </div>
+          </div>
+          <p class="k-hint" id="kantin-hint">
+          Aktifkan kamera dan hadapkan wajah. Nama tampil hanya jika skor cukup ketat (seperti uji akurasi).
+          </p>
+        </section>
+
+        <aside class="k-log-col" aria-label="Log pembelian">
+          <div class="k-log__head">
+            <h2 class="k-log__title">Log pembelian</h2>
+            <button type="button" class="btn btn--ghost btn--sm" id="kantin-log-refresh">Muat ulang</button>
+          </div>
+          <p class="k-log__meta" id="kantin-log-meta">Memuat…</p>
+          <div class="k-log__wrap">
+            <table class="k-table">
+              <thead>
+                <tr>
+                  <th scope="col">Nama</th>
+                  <th scope="col">Barang</th>
+                  <th scope="col">Waktu</th>
+                  <th scope="col">Nominal</th>
+                </tr>
+              </thead>
+              <tbody id="kantin-log-body">
+                <tr>
+                  <td class="k-table__empty" colspan="4">Belum ada data.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <!-- Modal: pengurangan saldo (PaymentBELANJAKantinWithKeterangan) -->
+    <div id="kantin-pay-modal" class="k-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kantin-pay-title">
+      <div class="k-modal__backdrop" data-close="1"></div>
+      <div class="k-modal__dialog">
+        <h2 class="k-modal__title" id="kantin-pay-title">Pengurangan saldo</h2>
+        <p class="k-modal__lead">Isi <strong>harga</strong> dan <strong>deskripsi barang</strong> (maks. 60 karakter).</p>
+        <dl class="k-modal__dl">
+          <div>
+            <dt>Nama</dt>
+            <dd id="kantin-pay-nama">—</dd>
+          </div>
+          <div>
+            <dt>Saldo saat ini</dt>
+            <dd id="kantin-pay-saldo">—</dd>
+          </div>
+          <div>
+            <dt>Sisa setelah potong</dt>
+            <dd id="kantin-pay-sisa">—</dd>
+          </div>
+        </dl>
+
+        <div class="k-modal__nominal">
+          <label class="auth-label" for="kantin-pay-nominal-input">Harga / nominal dipotong (Rp)</label>
+          <input
+            type="number"
+            id="kantin-pay-nominal-input"
+            class="auth-input k-nominal__input"
+            min="100"
+            step="100"
+            value="1000"
+            inputmode="numeric"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="k-modal__ket">
+          <label class="auth-label" for="kantin-pay-ket-input">Deskripsi barang</label>
+          <input
+            type="text"
+            id="kantin-pay-ket-input"
+            class="auth-input"
+            maxlength="60"
+            placeholder="Contoh: Nasi goreng + es teh"
+            autocomplete="off"
+          />
+          <p class="k-modal__ket-count" id="kantin-pay-ket-count">0 / 60</p>
+        </div>
+
+        <p id="kantin-pay-error" class="auth-error" hidden role="alert"></p>
+        <div class="k-modal__actions">
+          <button type="button" class="btn btn--ghost" id="kantin-pay-cancel">Batal</button>
+          <button type="button" class="btn btn--accent" id="kantin-pay-confirm">Potong saldo</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="kantin-toast" class="k-toast" hidden role="status"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="../admin/js/presensi-camera.js"></script>
+    <script src="../admin/js/face-ref-cache.js?v=face-cache-1"></script>
+    <script src="js/kantin-auth.js"></script>
+    <script src="js/kantin-log.js?v=pay-ket-1"></script>
+    <script src="js/kantin-facepay.js?v=pay-ket-2"></script>
+  </body>
+</html>

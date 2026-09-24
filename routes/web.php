@@ -24,10 +24,14 @@ Route::middleware(['auth', 'role:kasir'])->group(function () {
 
     Route::post('/kasir/checkout/online/process', [TransaksiController::class, 'processOnline'])
         ->name('transaksi.online');
+    Route::post('/kasir/inquiry-saldo', [TransaksiController::class, 'inquirySaldo'])
+        ->name('kasir.inquiry.saldo');
     Route::post('/kasir/confirm-waiting', [TransaksiController::class, 'confirmWaitingBarang'])->name('kasir.confirm.waiting');
     Route::get('/kasir2', [Transaksi2Controller::class, 'index'])->name('kasir2.index');
     Route::post('/kasir2/checkout/tunai/process', [Transaksi2Controller::class, 'processTunai'])->name('kasir2.tunai.process');
     Route::post('/kasir2/checkout/online/process', [Transaksi2Controller::class, 'processOnline'])->name('kasir2.online.process');
+    Route::post('/kasir2/inquiry-saldo', [Transaksi2Controller::class, 'inquirySaldo'])
+        ->name('kasir2.inquiry.saldo');
 });
 
 Route::post('/login', [LoginController::class, 'login'])->name('login');
