@@ -392,6 +392,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button id="btnOnline" class="ml-2 px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 transition-all">
                         Cashless<span class="keyboard-hint">F2</span>
                     </button>
+                    <button id="btnFace" class="ml-2 px-6 py-2 bg-emerald-600 text-white rounded font-bold hover:bg-emerald-700 transition-all">
+                        Face<span class="keyboard-hint">F3</span>
+                    </button>
                 </div>
 
 
@@ -518,6 +521,68 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="flex flex-col items-center justify-center p-6">
                 <div class="spinner mb-3"></div>
                 <p id="onlineProcessingText" class="text-sm text-gray-600">Memproses pembayaran...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="faceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-800">Pembayaran FacePay<span class="keyboard-hint ml-2">ESC untuk batal</span></h3>
+            <button id="btnCloseFace" type="button" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="mb-4 text-center p-4 bg-emerald-50 rounded border border-emerald-200">
+            <p class="text-sm text-gray-600 mb-1">Total Pembayaran</p>
+            <p id="faceTotal" class="text-3xl font-bold text-gray-800">Rp 0</p>
+            <p id="faceDiskon" class="text-xs text-red-600 mt-1 font-semibold hidden"></p>
+        </div>
+
+        <div id="faceCameraStep">
+            <div class="relative mx-auto bg-black rounded-lg overflow-hidden border-2 border-emerald-300" style="max-width:420px;">
+                <video id="faceVideo" class="w-full h-auto" playsinline muted autoplay style="transform:scaleX(-1);"></video>
+                <div id="faceMatchOverlay" class="hidden absolute bottom-0 left-0 right-0 bg-emerald-700/90 text-white text-center py-2 font-bold text-sm"></div>
+            </div>
+            <p id="faceStatus" class="text-sm text-gray-600 mt-2 text-center">Menyiapkan…</p>
+        </div>
+
+        <div id="faceConfirmStep" class="hidden mb-2">
+            <div class="p-4 rounded-lg border-2 bg-emerald-50 border-emerald-300 mb-3">
+                <p class="text-sm text-gray-600 mb-1">Siswa</p>
+                <p id="faceConfirmNama" class="text-lg font-bold text-gray-800 mb-2">—</p>
+                <p class="text-sm text-gray-600 mb-1">NIS (NOKARTU)</p>
+                <p id="faceConfirmNis" class="text-base font-mono font-semibold text-gray-800 mb-2">—</p>
+                <p class="text-sm text-gray-600 mb-1">Saldo</p>
+                <p id="faceConfirmSaldo" class="text-2xl font-bold text-gray-800">—</p>
+                <p class="text-sm text-gray-600 mb-1 mt-2">Total tagihan</p>
+                <p id="faceConfirmTotal" class="text-xl font-bold text-emerald-800">—</p>
+                <p id="faceConfirmStatus" class="text-sm font-semibold mt-2"></p>
+            </div>
+            <label for="faceKetInput" class="block text-sm font-semibold text-gray-700 mb-1">Keterangan barang (wajib, maks. 60)</label>
+            <input type="text" id="faceKetInput" maxlength="60"
+                class="w-full px-3 py-2 border-2 border-emerald-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                placeholder="Contoh: Nasi goreng, es teh">
+            <div class="flex gap-2 mt-4">
+                <button type="button" id="btnFaceBack"
+                    class="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded font-semibold transition">
+                    Ulangi wajah
+                </button>
+                <button type="button" id="btnFacePay" disabled
+                    class="flex-1 py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition">
+                    Bayar FacePay
+                </button>
+            </div>
+        </div>
+
+        <div id="faceProcessing" class="hidden">
+            <div class="flex flex-col items-center justify-center p-6">
+                <div class="spinner mb-3"></div>
+                <p class="text-sm text-gray-600">Memproses pembayaran FacePay…</p>
             </div>
         </div>
     </div>
@@ -1272,13 +1337,15 @@ document.addEventListener('keydown', function(e) {
     const cashModal = document.getElementById('cashModal');
     const onlineModal = document.getElementById('onlineModal');
 const searchModal = document.getElementById('searchModal');
+const faceModal = document.getElementById('faceModal');
 const isCashModalOpen = !cashModal.classList.contains('hidden');
 const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
 const isSearchModalOpen = !searchModal.classList.contains('hidden');
+const isFaceModalOpen = faceModal && !faceModal.classList.contains('hidden');
 
 if (e.key === 'F12') {
     e.preventDefault();
-    if (!isCashModalOpen && !isOnlineModalOpen && !isSearchModalOpen) {
+    if (!isCashModalOpen && !isOnlineModalOpen && !isSearchModalOpen && !isFaceModalOpen) {
         showSearchModal();
     }
     return;
@@ -1289,6 +1356,8 @@ if (e.key === 'Escape') {
         closeCashModal();
     } else if (isOnlineModalOpen && !isProcessingPayment) {
         closeOnlineModal();
+    } else if (isFaceModalOpen && !isProcessingPayment && window.KasirFacePay) {
+        window.KasirFacePay.close();
     } else if (isSearchModalOpen) {
         closeSearchModal();
     }
@@ -1326,7 +1395,7 @@ if (isCashModalOpen) {
     return;
 }
 
-if (isOnlineModalOpen) {
+if (isOnlineModalOpen || isFaceModalOpen) {
     return;
 }
 
@@ -1339,6 +1408,12 @@ if (e.key === 'F1') {
 if (e.key === 'F2') {
     e.preventDefault();
     showOnlinePayment();
+    return;
+}
+
+if (e.key === 'F3') {
+    e.preventDefault();
+    showFacePayment();
     return;
 }
 
@@ -1376,13 +1451,17 @@ document.addEventListener('keypress', function(e) {
 const cashModal = document.getElementById('cashModal');
 const onlineModal = document.getElementById('onlineModal');
 const searchModal = document.getElementById('searchModal');
+const faceModal = document.getElementById('faceModal');
 const isCashModalOpen = !cashModal.classList.contains('hidden');
 const isOnlineModalOpen = !onlineModal.classList.contains('hidden');
 const isSearchModalOpen = !searchModal.classList.contains('hidden');
+const isFaceModalOpen = faceModal && !faceModal.classList.contains('hidden');
 if (e.target.tagName === 'INPUT' && e.target.id === 'cashPaid') return;
 if (e.target.tagName === 'INPUT' && e.target.id === 'searchInput') return;
+if (e.target.tagName === 'INPUT' && e.target.id === 'faceKetInput') return;
 if (isCashModalOpen && e.target.tagName !== 'INPUT') return;
 if (isOnlineModalOpen && e.target.tagName !== 'INPUT') return;
+if (isFaceModalOpen) return;
 if (isSearchModalOpen) return;
 
 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -1406,6 +1485,7 @@ if (e.key === 'Enter') {
 });
 document.getElementById('btnCash').addEventListener('click', showCashPayment);
 document.getElementById('btnOnline').addEventListener('click', showOnlinePayment);
+document.getElementById('btnFace').addEventListener('click', showFacePayment);
 document.getElementById('btnCloseCash').addEventListener('click', closeCashModal);
 document.getElementById('btnCloseOnline').addEventListener('click', function() {
 if (!isProcessingPayment) {
@@ -1864,12 +1944,174 @@ form.appendChild(cartDataInput);
 document.body.appendChild(form);
 form.submit();
 }
+
+function calcCartTotals() {
+    let totalSebelum = 0;
+    let totalDiskon = 0;
+    cart.forEach(item => {
+        const baseQty = Math.min(item.qty, item.stok);
+        const baseSubtotal = baseQty * item.price;
+        let waitingSubtotal = 0;
+        if (waitingUsage[item.id] && waitingUsage[item.id].perWaiting) {
+            for (const wid in waitingUsage[item.id].perWaiting) {
+                const qty = waitingUsage[item.id].perWaiting[wid];
+                const w = waitingBarangData.find(x => x.id == wid);
+                if (w) waitingSubtotal += qty * w.harga_jual;
+            }
+        }
+        const subtotalSebelum = baseSubtotal + waitingSubtotal;
+        const diskonNominal = Math.floor((item.diskon / 100) * subtotalSebelum);
+        totalSebelum += subtotalSebelum;
+        totalDiskon += diskonNominal;
+    });
+    return {
+        totalSebelum: totalSebelum,
+        totalDiskon: totalDiskon,
+        grandTotal: totalSebelum - totalDiskon
+    };
+}
+
+function buildKetFromCart() {
+    const names = cart.map(function (item) {
+        return item.name || item.nama || '';
+    }).filter(Boolean);
+    let ket = names.join(', ');
+    if (ket.length > 60) ket = ket.slice(0, 57) + '...';
+    return ket || 'Belanja kasir';
+}
+
+function buildFaceCartPayload() {
+    let totalSebelumDiskon = 0;
+    let totalDiskon = 0;
+    const cartData = cart.map(item => {
+        const baseQty = Math.min(item.qty, item.stok);
+        const baseSubtotal = baseQty * item.price;
+        let waitingSubtotal = 0;
+        if (waitingUsage[item.id] && waitingUsage[item.id].perWaiting) {
+            for (const wid in waitingUsage[item.id].perWaiting) {
+                const qty = waitingUsage[item.id].perWaiting[wid];
+                const w = waitingBarangData.find(x => x.id == wid);
+                if (w) waitingSubtotal += qty * w.harga_jual;
+            }
+        }
+        const subtotalSebelum = baseSubtotal + waitingSubtotal;
+        const diskonNominal = Math.floor((item.diskon / 100) * subtotalSebelum);
+        const subtotal = subtotalSebelum - diskonNominal;
+        totalSebelumDiskon += subtotalSebelum;
+        totalDiskon += diskonNominal;
+        const usage = waitingUsage[item.id] || { total: 0, perWaiting: {} };
+        return {
+            id: item.id,
+            kode_barang: item.kode_barang,
+            name: item.name,
+            qty: item.qty,
+            harga: item.price,
+            stok: item.stok,
+            diskon: item.diskon,
+            diskon_nominal: diskonNominal,
+            subtotal: subtotal,
+            price: item.price,
+            waitingUsage: usage.perWaiting
+        };
+    });
+    return {
+        cartData: cartData,
+        totalSebelumDiskon: totalSebelumDiskon,
+        totalDiskon: totalDiskon,
+        grandTotal: totalSebelumDiskon - totalDiskon
+    };
+}
+
+function showFacePayment() {
+    if (cart.length === 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error!',
+            text: 'Keranjang kosong!',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#ef4444'
+        });
+        return;
+    }
+    useDiscount = true;
+    renderCart();
+    isProcessingPayment = false;
+    if (window.KasirFacePay) {
+        window.KasirFacePay.open();
+    }
+}
+
+function submitFaceCheckout(nokartu, ket) {
+    if (isProcessingPayment === false) isProcessingPayment = true;
+    const pack = buildFaceCartPayload();
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = "{{ url('/kasir/checkout/face/process') }}";
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    if (csrfToken) {
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_token';
+        csrfInput.value = csrfToken.content;
+        form.appendChild(csrfInput);
+    }
+
+    const fields = {
+        items: JSON.stringify(pack.cartData),
+        total: pack.totalSebelumDiskon,
+        diskon_nominal: pack.totalDiskon,
+        grand_total: pack.grandTotal,
+        pid: nokartu,
+        ket: ket,
+        cart_data: JSON.stringify(pack.cartData)
+    };
+    Object.keys(fields).forEach(function (name) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = fields[name];
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
 function formatRupiah(num) {
 if (isNaN(num) || num === '') return 'Rp 0';
 return 'Rp ' + parseInt(num).toLocaleString('id-ID');
 }
 console.log('Waiting Barang Data:', waitingBarangData);
 console.log('Waiting Barang Filtered:', waitingBarang);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="{{ asset('js/kasir-facepay.js') }}"></script>
+<script>
+if (window.KasirFacePay) {
+    window.KasirFacePay.init({
+        urls: {
+            refs: "{{ url('/kasir/face-refs') }}",
+            inquiry: "{{ url('/kasir/inquiry-saldo-face') }}",
+            checkout: "{{ url('/kasir/checkout/face/process') }}"
+        },
+        formatRupiah: formatRupiah,
+        showNotification: typeof showNotification === 'function' ? showNotification : function () {},
+        getGrandTotal: function () {
+            return calcCartTotals().grandTotal;
+        },
+        getDiskonTotal: function () {
+            return calcCartTotals().totalDiskon;
+        },
+        buildKetFromCart: buildKetFromCart,
+        submitCheckout: submitFaceCheckout,
+        onClose: function () {
+            isProcessingPayment = false;
+            useDiscount = false;
+            renderCart();
+        }
+    });
+}
 </script>
 </body>
 </html>

@@ -8,6 +8,7 @@ use App\Models\DetailTransaksi;
 use App\Models\Barang;
 use App\Models\WaitingBarang;
 use App\Services\BatuAlizzahClient;
+use App\Services\MalangAlizzahClient;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -136,6 +137,70 @@ class TransaksiController extends Controller
                 'ok' => true,
                 'nama' => $result['nama'],
                 'saldo' => $result['saldo'],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Foto referensi wajah dari DB malang_alizzah_face (siswa aktif ber-foto).
+     */
+    public function faceRefs()
+    {
+        try {
+            $rows = DB::connection('malang_face')
+                ->table('siswa')
+                ->select(['id', 'nis', 'nama', 'foto_wajah'])
+                ->where('aktif', 1)
+                ->whereNotNull('foto_wajah')
+                ->whereRaw('CHAR_LENGTH(foto_wajah) > 30')
+                ->orderBy('nama')
+                ->get();
+
+            $data = $rows->map(function ($row) {
+                return [
+                    'id' => (string) ($row->id ?? ''),
+                    'nis' => (string) ($row->nis ?? ''),
+                    'nama' => (string) ($row->nama ?? ''),
+                    'fotoWajah' => (string) ($row->foto_wajah ?? ''),
+                    'aktif' => true,
+                ];
+            })->values();
+
+            return response()->json(['ok' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'Gagal memuat foto referensi: ' . $e->getMessage(),
+            ], 502);
+        }
+    }
+
+    /** Inquiry saldo FacePay — Malang_Alizzah_ForVPS (NOKARTU = NIS) */
+    public function inquirySaldoFace(Request $request)
+    {
+        $noKartu = preg_replace('/\D/', '', (string) $request->input('nokartu', $request->input('pid', '')));
+        if ($noKartu === '') {
+            return response()->json(['ok' => false, 'error' => 'NIS siswa tidak valid'], 400);
+        }
+
+        try {
+            $result = MalangAlizzahClient::make()->inquirySaldo($noKartu);
+            if (!$result['ok']) {
+                return response()->json([
+                    'ok' => false,
+                    'error' => $result['error'] ?: 'NIS tidak terdaftar di merchant',
+                    'nama' => $result['nama'],
+                    'saldo' => $result['saldo'],
+                ], 422);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'nama' => $result['nama'],
+                'saldo' => $result['saldo'],
+                'nokartu' => $noKartu,
             ]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 502);
@@ -597,6 +662,289 @@ class TransaksiController extends Controller
 
             DB::commit();
             $suksesMsg = 'Pembayaran berhasil!';
+            if (!empty($pay['nama'])) {
+                $suksesMsg .= ' ' . $pay['nama'];
+            }
+            if ($pay['saldo'] !== null) {
+                $suksesMsg .= ' · Sisa saldo: Rp ' . number_format((int) $pay['saldo'], 0, ',', '.');
+            }
+            return redirect('/kasir')->with('success', $suksesMsg);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect('/kasir')->with('error', 'Kesalahan sistem: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Checkout FacePay — debit Malang_Alizzah PaymentBELANJAKantinWithKeterangan (NOKARTU=NIS).
+     */
+    public function processFace(Request $request)
+    {
+        DB::beginTransaction();
+        try {
+            $cart = json_decode($request->items, true);
+            $pid = preg_replace('/\D/', '', (string) $request->input('pid', $request->input('nokartu', '')));
+            $ket = trim((string) $request->input('ket', ''));
+            $ket = trim(preg_replace('/\s+/u', ' ', $ket) ?? $ket);
+            if (function_exists('mb_substr')) {
+                $ket = mb_substr($ket, 0, 60, 'UTF-8');
+            } else {
+                $ket = substr($ket, 0, 60);
+            }
+            $ket = trim($ket);
+
+            if ($pid === '') {
+                return redirect('/kasir')->with('error', 'NIS siswa tidak valid.');
+            }
+            if ($ket === '') {
+                $sessionData = $this->prepareCartSessionData($cart ?: []);
+                return redirect('/kasir')
+                    ->with('error', 'Keterangan barang wajib diisi (maks. 60 karakter).')
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('use_discount', true);
+            }
+
+            if (!$cart || count($cart) == 0) {
+                return redirect('/kasir')->with('error', 'Keranjang kosong.');
+            }
+
+            $items = [];
+            $total = 0;
+            $total_diskon = 0;
+            $insufficientStock = [];
+
+            foreach ($cart as $c) {
+                $barang = Barang::where('id', $c['id'])->lockForUpdate()->first();
+                if (!$barang) {
+                    DB::rollBack();
+                    $sessionData = $this->prepareCartSessionData($cart);
+                    return redirect('/kasir')
+                        ->with('error', 'Barang tidak ditemukan!')
+                        ->with('cart_data', $sessionData['cart'])
+                        ->with('waiting_usage', $sessionData['waiting_usage'])
+                        ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                        ->with('use_discount', true);
+                }
+
+                $qty_needed = (int) $c['qty'];
+
+                $waitingList = WaitingBarang::where('barang_id', $barang->id)
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                $waitingTotal = $waitingList->sum('stok');
+                $available_total = $barang->stok + $waitingTotal;
+
+                if ($qty_needed > $available_total) {
+                    $insufficientStock[] = [
+                        'barang_id' => $barang->id,
+                        'nama' => $barang->nama_barang,
+                        'requested' => $qty_needed,
+                        'available_qty' => $available_total,
+                        'stok' => $barang->stok,
+                    ];
+                    continue;
+                }
+
+                $qty_base = min($qty_needed, $barang->stok);
+                $waitingUsage = $c['waitingUsage'] ?? [];
+                $groupedItems = [];
+
+                $lastWaitingHargaJual = null;
+                $lastWaitingHargaBeli = null;
+
+                if ($qty_base > 0) {
+                    $key = $barang->harga_jual . '_' . $barang->harga_beli;
+                    if (!isset($groupedItems[$key])) {
+                        $groupedItems[$key] = [
+                            'barang_id' => $barang->id,
+                            'qty' => 0,
+                            'harga' => $barang->harga_jual,
+                            'harga_beli' => $barang->harga_beli,
+                            'diskon' => $barang->diskon->nilai ?? 0,
+                            'diskon_nominal' => 0,
+                            'subtotal' => 0,
+                            'profit' => 0,
+                        ];
+                    }
+                    $groupedItems[$key]['qty'] += $qty_base;
+                    $barang->stok -= $qty_base;
+                    $barang->save();
+                }
+
+                foreach ($waitingUsage as $wid => $wqty) {
+                    $wqty = (int) $wqty;
+                    if ($wqty <= 0) continue;
+
+                    $waiting = $waitingList->firstWhere('id', (int) $wid);
+                    if (!$waiting || $waiting->stok < $wqty) {
+                        DB::rollBack();
+                        $sessionData = $this->prepareCartSessionData($cart);
+                        return redirect('/kasir')
+                            ->with('error', 'Stok ' . $barang->nama_barang . ' tidak mencukupi!')
+                            ->with('cart_data', $sessionData['cart'])
+                            ->with('waiting_usage', $sessionData['waiting_usage'])
+                            ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                            ->with('use_discount', true);
+                    }
+
+                    $key = $waiting->harga_jual . '_' . $waiting->harga_beli;
+                    if (!isset($groupedItems[$key])) {
+                        $groupedItems[$key] = [
+                            'barang_id' => $barang->id,
+                            'qty' => 0,
+                            'harga' => $waiting->harga_jual,
+                            'harga_beli' => $waiting->harga_beli,
+                            'diskon' => $barang->diskon->nilai ?? 0,
+                            'diskon_nominal' => 0,
+                            'subtotal' => 0,
+                            'profit' => 0,
+                        ];
+                    }
+                    $groupedItems[$key]['qty'] += $wqty;
+
+                    $lastWaitingHargaJual = $waiting->harga_jual;
+                    $lastWaitingHargaBeli = $waiting->harga_beli;
+
+                    $waiting->stok -= $wqty;
+                    if ($waiting->stok <= 0) {
+                        $waiting->delete();
+                    } else {
+                        $waiting->save();
+                    }
+                }
+
+                foreach ($groupedItems as $item) {
+                    $subtotal_sebelum = $item['harga'] * $item['qty'];
+                    $diskon = floor(($item['diskon'] / 100) * $subtotal_sebelum);
+                    $subtotal = $subtotal_sebelum - $diskon;
+                    $modal = $item['harga_beli'] * $item['qty'];
+                    $profit = $subtotal - $modal;
+
+                    $item['diskon_nominal'] = $diskon;
+                    $item['subtotal'] = $subtotal;
+                    $item['profit'] = $profit;
+
+                    $items[] = $item;
+                    $total += $subtotal_sebelum;
+                    $total_diskon += $diskon;
+                }
+
+                $remainingWaiting = WaitingBarang::where('barang_id', $barang->id)->orderBy('id', 'asc')->lockForUpdate()->get();
+                if ($remainingWaiting->count() > 0) {
+                    $nextWaiting = $remainingWaiting->first();
+                    $barang->harga_beli = $nextWaiting->harga_beli;
+                    $barang->harga_jual = $nextWaiting->harga_jual;
+                    $barang->stok += $nextWaiting->stok;
+                    $barang->save();
+                    $nextWaiting->delete();
+                } elseif ($lastWaitingHargaJual !== null && $lastWaitingHargaBeli !== null) {
+                    $barang->harga_beli = $lastWaitingHargaBeli;
+                    $barang->harga_jual = $lastWaitingHargaJual;
+                    $barang->save();
+                }
+            }
+
+            if (count($insufficientStock) > 0) {
+                DB::rollBack();
+
+                $errorMsg = '<div style="text-align:left; font-size:14px;">Stok tidak mencukupi untuk:<div style="margin-top:12px;">';
+                foreach ($insufficientStock as $item) {
+                    $errorMsg .= '<div style="margin-bottom:10px; padding:10px; border:1px solid #fee2e2; background:#fff1f2; border-radius:8px;">';
+                    $errorMsg .= '<div style="font-weight:700; color:#991b1b;">' . $item['nama'] . '</div>';
+                    $errorMsg .= '<div style="font-size:13px; color:#7f1d1d; margin-top:4px;">';
+                    $errorMsg .= 'Diminta: <b>' . $item['requested'] . '</b> pcs<br>';
+                    $errorMsg .= 'Stok tersedia: <b>' . $item['available_qty'] . '</b> pcs';
+                    $errorMsg .= '</div></div>';
+                }
+                $errorMsg .= '</div></div>';
+
+                $sessionData = $this->prepareCartSessionData($cart);
+                return redirect('/kasir')
+                    ->with('error', $errorMsg)
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('updated_stocks', $insufficientStock)
+                    ->with('use_discount', true);
+            }
+
+            $grand_total = $total - $total_diskon;
+
+            try {
+                $pay = MalangAlizzahClient::make()->paymentBelanjaWithKeterangan(
+                    (string) $pid,
+                    (int) $grand_total,
+                    $ket
+                );
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                $sessionData = $this->prepareCartSessionData($cart);
+                return redirect('/kasir')
+                    ->with('error', $this->formatErrorMessage($e->getMessage()))
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('use_discount', true);
+            }
+
+            if (!$pay['ok']) {
+                DB::rollBack();
+                $sessionData = $this->prepareCartSessionData($cart);
+                $errMsg = $pay['message'];
+                if ($pay['result'] === 'SALDO_TAK_MENCUKUPI' && $pay['saldo'] !== null) {
+                    $errMsg = 'Saldo tidak mencukupi. Sisa saldo: Rp ' . number_format((int) $pay['saldo'], 0, ',', '.');
+                }
+                return redirect('/kasir')
+                    ->with('error', $this->formatErrorMessage($errMsg))
+                    ->with('cart_data', $sessionData['cart'])
+                    ->with('waiting_usage', $sessionData['waiting_usage'])
+                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                    ->with('use_discount', true);
+            }
+
+            $return_id = null;
+
+            $tanggal = Carbon::now('Asia/Jakarta');
+            $kode = 'TRX-' . $tanggal->format('YmdHis');
+
+            $profit_total = 0;
+            foreach ($items as $i) $profit_total += $i['profit'];
+
+            $transaksi = Transaksi::create([
+                'kode_transaksi' => $kode,
+                'tanggal' => $tanggal,
+                'total' => $total,
+                'bayar' => $grand_total,
+                'kembalian' => 0,
+                'metode' => 'face',
+                'pelanggan_id' => $pid,
+                'diskon_nominal' => $total_diskon,
+                'grand_total' => $grand_total,
+                'profit' => $profit_total,
+                'user_id' => Auth::id(),
+            ]);
+
+            foreach ($items as $i) {
+                DetailTransaksi::create([
+                    'transaksi_id' => $transaksi->id,
+                    'barang_id' => $i['barang_id'],
+                    'nama_barang' => Barang::find($i['barang_id'])->nama_barang,
+                    'qty' => $i['qty'],
+                    'harga' => $i['harga'],
+                    'diskon' => $i['diskon'],
+                    'diskon_nominal' => $i['diskon_nominal'],
+                    'subtotal' => $i['subtotal'],
+                    'profit' => $i['profit'],
+                    'return' => $return_id,
+                ]);
+            }
+
+            DB::commit();
+            $suksesMsg = 'Pembayaran FacePay berhasil!';
             if (!empty($pay['nama'])) {
                 $suksesMsg .= ' ' . $pay['nama'];
             }

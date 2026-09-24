@@ -63,6 +63,27 @@ return [
             ]) : [],
         ],
 
+        /** Master foto wajah FacePay (DB malang_alizzah_face) */
+        'malang_face' => [
+            'driver' => 'mysql',
+            'host' => env('MALANG_FACE_DB_HOST', '127.0.0.1'),
+            'port' => env('MALANG_FACE_DB_PORT', '3306'),
+            'database' => env('MALANG_FACE_DB_DATABASE', 'malang_alizzah_face'),
+            'username' => env('MALANG_FACE_DB_USERNAME', 'malang_alizzah_face'),
+            'password' => env('MALANG_FACE_DB_PASSWORD', 'malang_alizzah_face'),
+            'unix_socket' => env('MALANG_FACE_DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),
