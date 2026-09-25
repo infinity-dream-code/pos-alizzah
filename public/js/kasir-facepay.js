@@ -327,12 +327,14 @@
       var enough = (payload.saldo || 0) >= cfg.getGrandTotal();
       btn.disabled = !enough;
       btn.className = enough
-        ? "w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold transition"
-        : "w-full py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed";
+        ? "flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold transition"
+        : "flex-1 py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition";
+      btn.innerHTML =
+        'Bayar FacePay<span class="keyboard-hint">ENTER</span>';
       var status = $("faceConfirmStatus");
       if (status) {
         status.textContent = enough
-          ? "Saldo cukup. Konfirmasi keterangan lalu bayar."
+          ? "Saldo cukup. Konfirmasi keterangan lalu bayar (ENTER)."
           : "Saldo tidak mencukupi untuk total belanja.";
         status.className =
           "text-sm font-semibold mt-2 " +
@@ -389,6 +391,7 @@
           nokartu: nokartu,
           namaMerchant: json.nama || siswa.nama,
           saldo: json.saldo || 0,
+          faceToken: json.face_token || "",
         });
       })
       .catch(function (err) {
@@ -557,7 +560,12 @@
   }
 
   function submitPay() {
-    if (!matched || !matched.nokartu) return;
+    if (!matched || !matched.nokartu || !matched.faceToken) {
+      if (typeof cfg.showNotification === "function") {
+        cfg.showNotification("Sesi FacePay tidak valid. Ulangi scan wajah.", "error");
+      }
+      return;
+    }
     var ketInput = $("faceKetInput");
     var ket = ketInput ? String(ketInput.value || "").trim() : "";
     ket = ket.replace(/\s+/g, " ").slice(0, KET_MAX).trim();
@@ -573,7 +581,7 @@
       var conf = $("faceConfirmStep");
       if (conf) conf.classList.add("hidden");
       if (proc) proc.classList.remove("hidden");
-      cfg.submitCheckout(matched.nokartu, ket);
+      cfg.submitCheckout(matched.nokartu, ket, matched.faceToken);
     }
   }
 
@@ -590,12 +598,24 @@
         startCamera();
       });
     }
+    var ketInput = $("faceKetInput");
+    if (ketInput) {
+      ketInput.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        var payBtn = $("btnFacePay");
+        if (confirmOpen && payBtn && !payBtn.disabled) {
+          submitPay();
+        }
+      });
+    }
   }
 
   global.KasirFacePay = {
     init: init,
     open: openModal,
     close: closeModal,
+    pay: submitPay,
     isOpen: function () {
       return modalOpen;
     },

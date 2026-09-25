@@ -145,6 +145,7 @@ class TransaksiController extends Controller
 
     /**
      * Foto referensi wajah dari DB malang_alizzah_face (siswa aktif ber-foto).
+     * Hanya role kasir (middleware). Tidak expose ke publik.
      */
     public function faceRefs()
     {
@@ -172,7 +173,7 @@ class TransaksiController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,
-                'error' => 'Gagal memuat foto referensi: ' . $e->getMessage(),
+                'error' => 'Gagal memuat foto referensi.',
             ], 502);
         }
     }
@@ -181,8 +182,16 @@ class TransaksiController extends Controller
     public function inquirySaldoFace(Request $request)
     {
         $noKartu = preg_replace('/\D/', '', (string) $request->input('nokartu', $request->input('pid', '')));
-        if ($noKartu === '') {
+        if ($noKartu === '' || strlen($noKartu) > 32) {
             return response()->json(['ok' => false, 'error' => 'NIS siswa tidak valid'], 400);
+        }
+
+        // Hanya NIS yang terdaftar FacePay lokal (aktif + punya foto) — cegah probing saldo sembarang
+        if (!$this->faceSiswaEligible($noKartu)) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'NIS tidak terdaftar FacePay / belum ada foto referensi',
+            ], 422);
         }
 
         try {
@@ -196,15 +205,75 @@ class TransaksiController extends Controller
                 ], 422);
             }
 
+            $token = bin2hex(random_bytes(16));
+            $request->session()->put('facepay.challenge', [
+                'nokartu' => $noKartu,
+                'token' => hash('sha256', $token),
+                'saldo' => (int) $result['saldo'],
+                'user_id' => Auth::id(),
+                'expires_at' => now()->addMinutes(3)->getTimestamp(),
+            ]);
+
             return response()->json([
                 'ok' => true,
                 'nama' => $result['nama'],
                 'saldo' => $result['saldo'],
                 'nokartu' => $noKartu,
+                'face_token' => $token,
             ]);
         } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'error' => $e->getMessage()], 502);
+            return response()->json(['ok' => false, 'error' => 'Gagal inquiry saldo merchant'], 502);
         }
+    }
+
+    /** NIS aktif + berfoto di DB face */
+    private function faceSiswaEligible(string $nis): bool
+    {
+        try {
+            $rows = DB::connection('malang_face')
+                ->table('siswa')
+                ->select(['nis'])
+                ->where('aktif', 1)
+                ->whereNotNull('foto_wajah')
+                ->whereRaw('CHAR_LENGTH(foto_wajah) > 30')
+                ->get();
+            foreach ($rows as $row) {
+                if (preg_replace('/\D/', '', (string) $row->nis) === $nis) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{ok:bool,error:?string,challenge:?array}
+     */
+    private function consumeFaceChallenge(Request $request, string $pid): array
+    {
+        $rawToken = (string) $request->input('face_token', '');
+        $challenge = $request->session()->pull('facepay.challenge');
+
+        if (!is_array($challenge) || $rawToken === '') {
+            return ['ok' => false, 'error' => 'Sesi FacePay tidak valid. Ulangi scan wajah.', 'challenge' => null];
+        }
+        if ((int) ($challenge['user_id'] ?? 0) !== (int) Auth::id()) {
+            return ['ok' => false, 'error' => 'Sesi FacePay tidak cocok dengan kasir login.', 'challenge' => null];
+        }
+        if ((int) ($challenge['expires_at'] ?? 0) < now()->getTimestamp()) {
+            return ['ok' => false, 'error' => 'Sesi FacePay kedaluwarsa. Ulangi scan wajah.', 'challenge' => null];
+        }
+        if (!hash_equals((string) ($challenge['token'] ?? ''), hash('sha256', $rawToken))) {
+            return ['ok' => false, 'error' => 'Token FacePay tidak valid. Ulangi scan wajah.', 'challenge' => null];
+        }
+        if ((string) ($challenge['nokartu'] ?? '') !== $pid) {
+            return ['ok' => false, 'error' => 'NIS tidak cocok dengan sesi FacePay.', 'challenge' => null];
+        }
+
+        return ['ok' => true, 'error' => null, 'challenge' => $challenge];
     }
 
     public function processTunai(Request $request)
@@ -680,36 +749,64 @@ class TransaksiController extends Controller
      */
     public function processFace(Request $request)
     {
+        $cart = json_decode($request->items, true);
+        $pid = preg_replace('/\D/', '', (string) $request->input('pid', $request->input('nokartu', '')));
+        $ket = trim((string) $request->input('ket', ''));
+        $ket = trim(preg_replace('/\s+/u', ' ', $ket) ?? $ket);
+        if (function_exists('mb_substr')) {
+            $ket = mb_substr($ket, 0, 60, 'UTF-8');
+        } else {
+            $ket = substr($ket, 0, 60);
+        }
+        $ket = trim($ket);
+
+        $failRedirect = function (string $msg) use ($cart) {
+            $sessionData = $this->prepareCartSessionData(is_array($cart) ? $cart : []);
+            return redirect('/kasir')
+                ->with('error', $msg)
+                ->with('cart_data', $sessionData['cart'])
+                ->with('waiting_usage', $sessionData['waiting_usage'])
+                ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
+                ->with('use_discount', true);
+        };
+
+        if ($pid === '' || strlen($pid) > 32) {
+            return $failRedirect('NIS siswa tidak valid.');
+        }
+        if ($ket === '') {
+            return $failRedirect('Keterangan barang wajib diisi (maks. 60 karakter).');
+        }
+        if (!$cart || count($cart) == 0) {
+            return redirect('/kasir')->with('error', 'Keranjang kosong.');
+        }
+
+        // Cegah bypass: bayar hanya NIS yang baru di-inquiry + token one-time (3 menit)
+        $gate = $this->consumeFaceChallenge($request, $pid);
+        if (!$gate['ok']) {
+            return $failRedirect($gate['error'] ?: 'Sesi FacePay tidak valid.');
+        }
+
+        if (!$this->faceSiswaEligible($pid)) {
+            return $failRedirect('NIS tidak terdaftar FacePay / belum ada foto referensi.');
+        }
+
+        foreach ($cart as $c) {
+            $qty = (int) ($c['qty'] ?? 0);
+            if ($qty < 1 || $qty > 9999) {
+                return $failRedirect('Qty barang tidak valid.');
+            }
+            if (empty($c['id'])) {
+                return $failRedirect('Data keranjang tidak valid.');
+            }
+        }
+
+        $lock = cache()->lock('facepay:pay:user:' . Auth::id(), 45);
+        if (!$lock->get()) {
+            return $failRedirect('Pembayaran FacePay sedang diproses. Tunggu sebentar.');
+        }
+
         DB::beginTransaction();
         try {
-            $cart = json_decode($request->items, true);
-            $pid = preg_replace('/\D/', '', (string) $request->input('pid', $request->input('nokartu', '')));
-            $ket = trim((string) $request->input('ket', ''));
-            $ket = trim(preg_replace('/\s+/u', ' ', $ket) ?? $ket);
-            if (function_exists('mb_substr')) {
-                $ket = mb_substr($ket, 0, 60, 'UTF-8');
-            } else {
-                $ket = substr($ket, 0, 60);
-            }
-            $ket = trim($ket);
-
-            if ($pid === '') {
-                return redirect('/kasir')->with('error', 'NIS siswa tidak valid.');
-            }
-            if ($ket === '') {
-                $sessionData = $this->prepareCartSessionData($cart ?: []);
-                return redirect('/kasir')
-                    ->with('error', 'Keterangan barang wajib diisi (maks. 60 karakter).')
-                    ->with('cart_data', $sessionData['cart'])
-                    ->with('waiting_usage', $sessionData['waiting_usage'])
-                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
-                    ->with('use_discount', true);
-            }
-
-            if (!$cart || count($cart) == 0) {
-                return redirect('/kasir')->with('error', 'Keranjang kosong.');
-            }
-
             $items = [];
             $total = 0;
             $total_diskon = 0;
@@ -719,13 +816,8 @@ class TransaksiController extends Controller
                 $barang = Barang::where('id', $c['id'])->lockForUpdate()->first();
                 if (!$barang) {
                     DB::rollBack();
-                    $sessionData = $this->prepareCartSessionData($cart);
-                    return redirect('/kasir')
-                        ->with('error', 'Barang tidak ditemukan!')
-                        ->with('cart_data', $sessionData['cart'])
-                        ->with('waiting_usage', $sessionData['waiting_usage'])
-                        ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
-                        ->with('use_discount', true);
+                    $lock->release();
+                    return $failRedirect('Barang tidak ditemukan!');
                 }
 
                 $qty_needed = (int) $c['qty'];
@@ -756,6 +848,26 @@ class TransaksiController extends Controller
                 $lastWaitingHargaJual = null;
                 $lastWaitingHargaBeli = null;
 
+                $waitingSum = 0;
+                foreach ($waitingUsage as $wid => $wqty) {
+                    $wqty = (int) $wqty;
+                    if ($wqty <= 0) {
+                        continue;
+                    }
+                    $waiting = $waitingList->firstWhere('id', (int) $wid);
+                    if (!$waiting || (int) $waiting->barang_id !== (int) $barang->id) {
+                        DB::rollBack();
+                        $lock->release();
+                        return $failRedirect('Data waiting barang tidak valid.');
+                    }
+                    $waitingSum += $wqty;
+                }
+                if ($waitingSum > max(0, $qty_needed - $qty_base)) {
+                    DB::rollBack();
+                    $lock->release();
+                    return $failRedirect('Qty waiting tidak sesuai stok.');
+                }
+
                 if ($qty_base > 0) {
                     $key = $barang->harga_jual . '_' . $barang->harga_beli;
                     if (!isset($groupedItems[$key])) {
@@ -777,18 +889,15 @@ class TransaksiController extends Controller
 
                 foreach ($waitingUsage as $wid => $wqty) {
                     $wqty = (int) $wqty;
-                    if ($wqty <= 0) continue;
+                    if ($wqty <= 0) {
+                        continue;
+                    }
 
                     $waiting = $waitingList->firstWhere('id', (int) $wid);
                     if (!$waiting || $waiting->stok < $wqty) {
                         DB::rollBack();
-                        $sessionData = $this->prepareCartSessionData($cart);
-                        return redirect('/kasir')
-                            ->with('error', 'Stok ' . $barang->nama_barang . ' tidak mencukupi!')
-                            ->with('cart_data', $sessionData['cart'])
-                            ->with('waiting_usage', $sessionData['waiting_usage'])
-                            ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
-                            ->with('use_discount', true);
+                        $lock->release();
+                        return $failRedirect('Stok ' . $barang->nama_barang . ' tidak mencukupi!');
                     }
 
                     $key = $waiting->harga_jual . '_' . $waiting->harga_beli;
@@ -850,6 +959,7 @@ class TransaksiController extends Controller
 
             if (count($insufficientStock) > 0) {
                 DB::rollBack();
+                $lock->release();
 
                 $errorMsg = '<div style="text-align:left; font-size:14px;">Stok tidak mencukupi untuk:<div style="margin-top:12px;">';
                 foreach ($insufficientStock as $item) {
@@ -873,6 +983,20 @@ class TransaksiController extends Controller
             }
 
             $grand_total = $total - $total_diskon;
+            if ($grand_total < 1) {
+                DB::rollBack();
+                $lock->release();
+                return $failRedirect('Total pembayaran tidak valid.');
+            }
+
+            $hintSaldo = (int) (($gate['challenge']['saldo'] ?? 0));
+            if ($hintSaldo > 0 && $hintSaldo < $grand_total) {
+                DB::rollBack();
+                $lock->release();
+                return $failRedirect(
+                    'Saldo tidak mencukupi. Sisa saldo: Rp ' . number_format($hintSaldo, 0, ',', '.')
+                );
+            }
 
             try {
                 $pay = MalangAlizzahClient::make()->paymentBelanjaWithKeterangan(
@@ -882,37 +1006,29 @@ class TransaksiController extends Controller
                 );
             } catch (\Throwable $e) {
                 DB::rollBack();
-                $sessionData = $this->prepareCartSessionData($cart);
-                return redirect('/kasir')
-                    ->with('error', $this->formatErrorMessage($e->getMessage()))
-                    ->with('cart_data', $sessionData['cart'])
-                    ->with('waiting_usage', $sessionData['waiting_usage'])
-                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
-                    ->with('use_discount', true);
+                $lock->release();
+                return $failRedirect($this->formatErrorMessage('Pembayaran merchant gagal. Silakan coba lagi.'));
             }
 
             if (!$pay['ok']) {
                 DB::rollBack();
-                $sessionData = $this->prepareCartSessionData($cart);
+                $lock->release();
                 $errMsg = $pay['message'];
                 if ($pay['result'] === 'SALDO_TAK_MENCUKUPI' && $pay['saldo'] !== null) {
                     $errMsg = 'Saldo tidak mencukupi. Sisa saldo: Rp ' . number_format((int) $pay['saldo'], 0, ',', '.');
                 }
-                return redirect('/kasir')
-                    ->with('error', $this->formatErrorMessage($errMsg))
-                    ->with('cart_data', $sessionData['cart'])
-                    ->with('waiting_usage', $sessionData['waiting_usage'])
-                    ->with('waiting_confirmed', $sessionData['waiting_confirmed'])
-                    ->with('use_discount', true);
+                return $failRedirect($this->formatErrorMessage($errMsg));
             }
 
             $return_id = null;
 
             $tanggal = Carbon::now('Asia/Jakarta');
-            $kode = 'TRX-' . $tanggal->format('YmdHis');
+            $kode = 'TRX-' . $tanggal->format('YmdHis') . '-' . substr(bin2hex(random_bytes(3)), 0, 6);
 
             $profit_total = 0;
-            foreach ($items as $i) $profit_total += $i['profit'];
+            foreach ($items as $i) {
+                $profit_total += $i['profit'];
+            }
 
             $transaksi = Transaksi::create([
                 'kode_transaksi' => $kode,
@@ -944,6 +1060,7 @@ class TransaksiController extends Controller
             }
 
             DB::commit();
+            $lock->release();
             $suksesMsg = 'Pembayaran FacePay berhasil!';
             if (!empty($pay['nama'])) {
                 $suksesMsg .= ' ' . $pay['nama'];
@@ -954,7 +1071,8 @@ class TransaksiController extends Controller
             return redirect('/kasir')->with('success', $suksesMsg);
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect('/kasir')->with('error', 'Kesalahan sistem: ' . $e->getMessage());
+            $lock->release();
+            return redirect('/kasir')->with('error', 'Kesalahan sistem. Silakan coba lagi.');
         }
     }
 

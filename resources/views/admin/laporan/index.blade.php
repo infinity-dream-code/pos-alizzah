@@ -30,6 +30,7 @@
                         <option value="">Semua</option>
                         <option value="tunai" {{ request('metode')=='tunai'?'selected':'' }}>Tunai</option>
                         <option value="online" {{ request('metode')=='online'?'selected':'' }}>Online</option>
+                        <option value="face" {{ request('metode')=='face'?'selected':'' }}>FacePay</option>
                     </select>
                 </div>
 

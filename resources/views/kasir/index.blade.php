@@ -567,14 +567,17 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="text" id="faceKetInput" maxlength="60"
                 class="w-full px-3 py-2 border-2 border-emerald-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
                 placeholder="Contoh: Nasi goreng, es teh">
-            <div class="flex gap-2 mt-4">
-                <button type="button" id="btnFaceBack"
-                    class="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded font-semibold transition">
-                    Ulangi wajah
+            <div class="flex gap-2 mt-4 items-stretch">
+                <button type="button" id="btnFaceBack" title="Ulangi wajah"
+                    class="shrink-0 w-12 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded font-semibold transition flex items-center justify-center"
+                    aria-label="Ulangi wajah">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
                 </button>
                 <button type="button" id="btnFacePay" disabled
                     class="flex-1 py-3 bg-gray-400 text-white rounded font-semibold cursor-not-allowed transition">
-                    Bayar FacePay
+                    Bayar FacePay<span class="keyboard-hint">ENTER</span>
                 </button>
             </div>
         </div>
@@ -1395,7 +1398,19 @@ if (isCashModalOpen) {
     return;
 }
 
-if (isOnlineModalOpen || isFaceModalOpen) {
+if (isOnlineModalOpen) {
+    return;
+}
+
+if (isFaceModalOpen) {
+    if (e.key === 'Enter' && !isProcessingPayment && window.KasirFacePay) {
+        const confirmStep = document.getElementById('faceConfirmStep');
+        const btnPay = document.getElementById('btnFacePay');
+        if (confirmStep && !confirmStep.classList.contains('hidden') && btnPay && !btnPay.disabled) {
+            e.preventDefault();
+            window.KasirFacePay.pay();
+        }
+    }
     return;
 }
 
@@ -2041,7 +2056,7 @@ function showFacePayment() {
     }
 }
 
-function submitFaceCheckout(nokartu, ket) {
+function submitFaceCheckout(nokartu, ket, faceToken) {
     if (isProcessingPayment === false) isProcessingPayment = true;
     const pack = buildFaceCartPayload();
     const form = document.createElement('form');
@@ -2064,6 +2079,7 @@ function submitFaceCheckout(nokartu, ket) {
         grand_total: pack.grandTotal,
         pid: nokartu,
         ket: ket,
+        face_token: faceToken || '',
         cart_data: JSON.stringify(pack.cartData)
     };
     Object.keys(fields).forEach(function (name) {
