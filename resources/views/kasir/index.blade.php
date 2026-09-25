@@ -491,19 +491,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
                 </svg>
                 <p class="text-lg font-bold text-gray-800 mb-1">Tap Kartu RFID</p>
-                <p class="text-sm text-gray-600 mb-4">Tempelkan kartu pada reader</p>
-                <div class="w-full max-w-sm text-left">
-                    <label for="rfidInput" class="block text-xs font-semibold text-gray-500 mb-1">Atau ketik nomor kartu (mode coba)</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="rfidInput" autocomplete="off" autofocus
-                            class="flex-1 px-3 py-2 border-2 border-blue-300 rounded text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                            placeholder="UID / nomor kartu">
-                        <button type="button" id="rfidSubmitBtn"
-                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded shrink-0">
-                            Cek
-                        </button>
-                    </div>
-                </div>
+                <p class="text-sm text-gray-600">Tempelkan kartu pada reader</p>
+                {{-- Input tersembunyi tapi tetap fokusable: reader RFID (keyboard wedge) --}}
+                <input type="text" id="rfidInput" autocomplete="off" autofocus
+                    class="sr-only"
+                    style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
+                    aria-label="RFID reader">
             </div>
         </div>
 
@@ -1728,6 +1721,15 @@ setTimeout(() => {
     document.getElementById('rfidInput').focus();
 }, 100);
 }
+
+const rfidStepEl = document.getElementById('rfidStep');
+if (rfidStepEl) {
+    rfidStepEl.addEventListener('click', function () {
+        const inp = document.getElementById('rfidInput');
+        if (inp) inp.focus();
+    });
+}
+
 function closeOnlineModal() {
     document.getElementById('onlineModal').classList.add('hidden');
     document.body.style.overflow = 'auto';
@@ -1749,23 +1751,6 @@ inquiryThenPay(rfid);
 e.target.value = '';
 }
 });
-
-function submitRfidFromInput() {
-    if (isProcessingPayment) return;
-    const inp = document.getElementById('rfidInput');
-    const rfid = inp ? inp.value.trim() : '';
-    if (!rfid) {
-        if (inp) inp.focus();
-        return;
-    }
-    inquiryThenPay(rfid);
-    if (inp) inp.value = '';
-}
-
-const rfidSubmitBtn = document.getElementById('rfidSubmitBtn');
-if (rfidSubmitBtn) {
-    rfidSubmitBtn.addEventListener('click', submitRfidFromInput);
-}
 
 function getCsrfToken() {
     const el = document.querySelector('meta[name="csrf-token"]');
