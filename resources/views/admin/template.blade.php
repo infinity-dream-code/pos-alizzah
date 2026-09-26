@@ -397,8 +397,18 @@
     </svg>
     <span>Pembelian</span>
 </a>
-
-
+<a href="{{ url('admin/return-barang') }}" class="menu-item {{ Request::is('admin/return-barang*') ? 'active' : '' }}">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
+    </svg>
+    <span>Return Barang</span>
+</a>
+<a href="{{ url('admin/supplier') }}" class="menu-item {{ Request::is('admin/supplier*') ? 'active' : '' }}">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+    </svg>
+    <span>Master Supplier</span>
+</a>
 
             <div class="menu-divider"></div>
             <a href="{{ url('admin/laporan') }}" class="menu-item {{ Request::is('admin/laporan*') ? 'active' : '' }}">

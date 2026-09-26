@@ -11,6 +11,8 @@ use App\Http\Controllers\TransaksiController;
 use App\Http\Controllers\Transaksi2Controller;
 use App\Http\Controllers\DiskonController;
 use App\Http\Controllers\WaitingBarangController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\ReturnBarangController;
 
 Route::get('/', function () {
     return view('index');
@@ -90,6 +92,20 @@ Route::middleware(['role:admin'])->group(function () {
         Route::get('/search-products', [WaitingBarangController::class, 'searchProducts'])->name('waiting.search');
     });
 
+    Route::prefix('admin/supplier')->group(function () {
+        Route::get('/', [SupplierController::class, 'index'])->name('supplier.index');
+        Route::get('/create', [SupplierController::class, 'create'])->name('supplier.create');
+        Route::post('/store', [SupplierController::class, 'store'])->name('supplier.store');
+        Route::get('/edit/{id}', [SupplierController::class, 'edit'])->name('supplier.edit');
+        Route::put('/update/{id}', [SupplierController::class, 'update'])->name('supplier.update');
+        Route::delete('/destroy/{id}', [SupplierController::class, 'destroy'])->name('supplier.destroy');
+    });
+
+    Route::prefix('admin/return-barang')->group(function () {
+        Route::get('/', [ReturnBarangController::class, 'index'])->name('return.index');
+        Route::post('/store', [ReturnBarangController::class, 'store'])->name('return.store');
+        Route::get('/search-products', [ReturnBarangController::class, 'searchProducts'])->name('return.search');
+    });
 
     Route::prefix('admin/transaksi')->group(function () {
         Route::get('/', [TransaksiController::class, 'index'])->name('transaksi.index');
